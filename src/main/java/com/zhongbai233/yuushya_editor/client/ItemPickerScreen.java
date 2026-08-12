@@ -11,7 +11,6 @@ import com.zhongbai233.yuushya_editor.core.camera.CameraMode;
 import com.zhongbai233.yuushya_editor.core.camera.CameraState;
 import com.zhongbai233.yuushya_editor.core.projection.Viewport;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -270,7 +269,7 @@ public final class ItemPickerScreen extends Screen {
             entries.add(new ItemEntry(stack, id, displayName,
                     (id + ' ' + displayName).toLowerCase(Locale.ROOT)));
         }
-        entries.sort(Comparator.comparing(ItemEntry::id));
+        entries.sort((left, right) -> left.id().compareTo(right.id()));
         return List.copyOf(entries);
     }
 

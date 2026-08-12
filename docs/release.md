@@ -15,7 +15,7 @@ Git tag 使用 `v<version>`，例如 `v0.1.0-alpha`。tag 中去掉前导 `v` �
 1. 更新 `CHANGELOG.md`，把 Unreleased 内容整理为本次版本。
 2. 核对 README 兼容矩阵和 `gradle.properties`。
 3. 重新审计 Yuushya 目标版本的 Screen、TransformData、BlockShape 和 packet 类。
-4. 发布当前 BenchMod 到 Maven Local。
+4. 核对 `modbench_version` 仍指向已通过发布审计的不可变 JitPack tag。
 5. 执行：
 
 ```shell
@@ -30,9 +30,8 @@ Git tag 使用 `v<version>`，例如 `v0.1.0-alpha`。tag 中去掉前导 `v` �
 
 `.github/workflows/ci.yml` 在 `master`、`dev`、`v*` tag、Pull Request 和手动触发时运行。它会：
 
-1. 检出本项目和 BenchMod；
-2. 使用 Java 25 和 BenchMod wrapper 属性声明的 Gradle 9.5.1 发布 SNAPSHOT 到 Maven Local；由于上游
-   当前没有提交 `gradle-wrapper.jar`，CI 由 `setup-gradle` 提供该版本，不调用缺少 Jar 的上游 wrapper；
+1. 检出本项目并设置 Java 25；
+2. 通过 JitPack 解析固定版本的 BenchMod 插件、API 和 Runtime；
 3. 校验 Gradle Wrapper、IDE classpath、测试、翻译、宿主 Jar 和生产 Jar；
 4. 从 `build.nosync/libs/` 复制唯一生产 Jar；
 5. 生成统一文件名和 `.sha256`；

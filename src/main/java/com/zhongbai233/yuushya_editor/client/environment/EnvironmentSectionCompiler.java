@@ -86,7 +86,7 @@ public final class EnvironmentSectionCompiler {
             }
             return new CompiledSection(snapshot, meshes, storage);
         } catch (Throwable failure) {
-            meshes.values().forEach(MeshData::close);
+            for (MeshData mesh : meshes.values()) mesh.close();
             closeStorage(storageByLayer);
             throw failure;
         } finally {
@@ -154,9 +154,9 @@ public final class EnvironmentSectionCompiler {
         }
 
         @Override public void close() {
-            layers.values().forEach(MeshData::close);
+            for (MeshData mesh : layers.values()) mesh.close();
             layers.clear();
-            storage.values().forEach(ByteBufferBuilder::close);
+            for (ByteBufferBuilder buffer : storage.values()) buffer.close();
             storage.clear();
         }
     }

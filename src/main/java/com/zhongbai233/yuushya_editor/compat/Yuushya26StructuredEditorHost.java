@@ -107,11 +107,14 @@ public final class Yuushya26StructuredEditorHost implements YuushyaEditorHost<Ob
             rawLayers.put(id, raw);
             rawSlots.put(id, slot);
         }
-        expectedLayerIds = layers.stream().map(SceneLayer::id).toList();
-        UUID selected = rawSlots.entrySet().stream()
-                .filter(entry -> entry.getValue() == selectedSlot)
-                .map(Map.Entry::getKey)
-                .findFirst().orElse(null);
+        expectedLayerIds = layerIds(layers);
+        UUID selected = null;
+        for (Map.Entry<UUID, Integer> entry : rawSlots.entrySet()) {
+            if (entry.getValue() == selectedSlot) {
+                selected = entry.getKey();
+                break;
+            }
+        }
         return new SceneDocument<>(layers, selected, collisionShape);
     }
 
@@ -201,8 +204,14 @@ public final class Yuushya26StructuredEditorHost implements YuushyaEditorHost<Ob
             rawLayers.put(layer.id(), clientLayers.get(slot));
             rawSlots.put(layer.id(), slot);
         }
-        expectedLayerIds = draft.layers().stream().map(SceneLayer::id).toList();
+        expectedLayerIds = layerIds(draft.layers());
         invoke(bindings.sendSuccess, null, blockPos);
+    }
+
+    private static List<UUID> layerIds(List<SceneLayer<Object>> layers) {
+        List<UUID> ids = new ArrayList<>(layers.size());
+        for (SceneLayer<Object> layer : layers) ids.add(layer.id());
+        return List.copyOf(ids);
     }
 
     private SceneLayer<Object> createInitialLayer() {

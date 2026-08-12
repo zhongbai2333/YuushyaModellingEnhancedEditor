@@ -68,7 +68,6 @@ import org.lwjgl.glfw.GLFW;
 public final class YuushyaEditorScreen extends Screen {
     private static final int GOLD = BlackGoldUi.GOLD;
     private static final int GOLD_DIM = BlackGoldUi.GOLD_DIM;
-    private static final int TEXT = BlackGoldUi.TEXT_PRIMARY;
     private static final int TEXT_SECONDARY = BlackGoldUi.TEXT_SECONDARY;
     private static final int TEXT_DIM = BlackGoldUi.TEXT_DIM;
     private static final int ERROR = 0xFFFF6B6B;
@@ -450,7 +449,7 @@ public final class YuushyaEditorScreen extends Screen {
         addOrientationAxis(axes, view, new Vector3f(0.0F, -1.0F, 0.0F), "", 0xFF3EC45B);
         addOrientationAxis(axes, view, new Vector3f(0.0F, 0.0F, 1.0F), "Z", 0xFF3B70D4);
         addOrientationAxis(axes, view, new Vector3f(0.0F, 0.0F, -1.0F), "", 0xFF3B70D4);
-        axes.sort(java.util.Comparator.comparingDouble(OrientationAxis::depth));
+        axes.sort((left, right) -> Double.compare(left.depth(), right.depth()));
         for (OrientationAxis axis : axes) {
             if (axis.depth() < 0.0D) drawOrientationAxis(graphics, centerX, centerY, axis, false);
         }
@@ -996,8 +995,9 @@ public final class YuushyaEditorScreen extends Screen {
     }
 
     private void applyZFightOptimization(List<ZFightDetector.Conflict> conflicts) {
-        Map<UUID, Vector3d> offsets = ZFightOptimizer.worldOffsets(
-                draft.layers().stream().map(SceneLayer::id).toList(), conflicts,
+        List<UUID> layerIds = new ArrayList<>(draft.layers().size());
+        for (SceneLayer<Object> layer : draft.layers()) layerIds.add(layer.id());
+        Map<UUID, Vector3d> offsets = ZFightOptimizer.worldOffsets(layerIds, conflicts,
                 ZFightOptimizer.DEFAULT_WORLD_EPSILON);
         if (offsets.isEmpty()) return;
         List<SceneLayer<Object>> adjusted = new ArrayList<>(draft.layers().size());
@@ -1101,7 +1101,7 @@ public final class YuushyaEditorScreen extends Screen {
                     ? "screen.yuushya_modelling_enhanced_editor.replace_item"
                     : "screen.yuushya_modelling_enhanced_editor.edit_text"));
         }
-        if (!active) {
+        if (selected == null) {
             if (visibilityButton != null) visibilityButton.active = false;
             return;
         }
@@ -1262,19 +1262,6 @@ public final class YuushyaEditorScreen extends Screen {
         environmentPreview.update(minecraft.level, origin);
         environmentPreview.tick();
         environmentFrame = environmentPreview.frame();
-    }
-
-    private String gizmoShortcutLabel() {
-        if (compactLayout()) return switch (gizmoMode) {
-            case MOVE -> "[W] Move";
-            case ROTATE -> "[E] Rotate";
-            case SCALE -> "[R] Scale";
-        };
-        return switch (gizmoMode) {
-            case MOVE -> "[W] Move · E Rotate · R Scale";
-            case ROTATE -> "W Move · [E] Rotate · R Scale";
-            case SCALE -> "W Move · E Rotate · [R] Scale";
-        };
     }
 
     private void finishGizmoDrag() {

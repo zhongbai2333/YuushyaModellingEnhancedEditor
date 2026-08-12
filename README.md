@@ -60,7 +60,7 @@ Yuushya Townscape 的 Mod ID 是 `yuushya`，Yuushya Modelling 的 Mod ID 是 `y
 - 55 个单元测试通过；
 - 干净发布构建会校验 Yuushya 开发 Jar 的版本与 SHA-256，并拒绝混入 Bench、Yuushya 本体或冲突 class 的制品；
 - 真实 Minecraft + NeoForge + Yuushya + ModBench 客户端场景通过，覆盖三类编辑器、自动保存、删除、碰撞箱、Z-fighting、环境渲染和局部缓存失效；
-- 最近一次测量阶段帧间隔均值约 `7.38 ms`、P95 约 `13.01 ms`；环境采集最大切片约 `3.77 ms`，单 Tick 最大约 `5.25 ms`，均低于 `10 ms` / `12 ms` 硬门槛。
+- 最近一次测量阶段帧间隔均值约 `4.18 ms`、P95 约 `6.99 ms`；环境采集最大切片约 `3.17 ms`，单 Tick 最大约 `4.85 ms`，均低于 `10 ms` / `12 ms` 硬门槛。
 
 性能数字只描述该次本机验收，不是所有硬件的帧率承诺。完整验收边界见 [项目交接文档](docs/project-handoff.md)。
 
@@ -74,7 +74,8 @@ Yuushya Townscape 的 Mod ID 是 `yuushya`，Yuushya Modelling 的 Mod ID 是 `y
 ./gradlew verifyYuushyaEditorBench --no-daemon
 ```
 
-ModBench Gradle 插件目前从 Maven Local 使用。首次构建前，需要从 [BenchMod](https://github.com/zhongbai2333/BenchMod) 执行 `./gradlew publishToMavenLocal`。CI 会自动检出并发布该依赖。
+ModBench Gradle 插件和运行时固定使用 [BenchMod 0.1.1](https://github.com/zhongbai2333/BenchMod/tree/0.1.1)，
+由 JitPack 自动解析，无需预先克隆或发布到 Maven Local。
 
 开发环境、VS Code 修复和 Gradle 任务详见 [开发指南](docs/development.md)；发版规则见 [发布指南](docs/release.md)。
 

@@ -1,9 +1,11 @@
 package com.zhongbai233.yuushya_editor.core;
 
 import com.zhongbai233.yuushya_editor.core.preview.CollisionShape;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 /** Immutable snapshot edited locally before the host adapter submits changes. */
@@ -12,17 +14,17 @@ public record SceneDocument<T>(List<SceneLayer<T>> layers, UUID selectedLayerId,
     public SceneDocument {
         Objects.requireNonNull(layers, "layers");
         Objects.requireNonNull(collisionShape, "collisionShape");
-        layers = List.copyOf(layers);
-        if (layers.stream().anyMatch(Objects::isNull)) {
-            throw new IllegalArgumentException("layers must not contain null");
+        Set<UUID> layerIds = new HashSet<>(layers.size());
+        for (SceneLayer<T> layer : layers) {
+            if (layer == null) throw new IllegalArgumentException("layers must not contain null");
+            if (!layerIds.add(layer.id())) {
+                throw new IllegalArgumentException("layer ids must be unique");
+            }
         }
-        long distinctIds = layers.stream().map(SceneLayer::id).distinct().count();
-        if (distinctIds != layers.size()) {
-            throw new IllegalArgumentException("layer ids must be unique");
-        }
-        if (selectedLayerId != null && layers.stream().noneMatch(layer -> layer.id().equals(selectedLayerId))) {
+        if (selectedLayerId != null && !layerIds.contains(selectedLayerId)) {
             throw new IllegalArgumentException("selected layer must exist in the document");
         }
+        layers = List.copyOf(layers);
     }
 
     /** Compatibility constructor for host-neutral documents that do not expose a shape. */

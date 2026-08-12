@@ -18,6 +18,8 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- BenchMod is now pinned to the immutable JitPack `0.1.1` release; local builds and CI no longer clone and
+  publish a separate BenchMod checkout to Maven Local.
 - Environment capture now yields every 32 cells instead of after a complete 20×20 neighborhood plane.
 - Minecraft and NeoForge metadata ranges are pinned to the audited 26.1.2 / 26.1.2.76 versions.
 - Non-essential environment invalidation Mixins are optional; editor binding also falls back on linkage errors.
@@ -28,8 +30,9 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- CI IDE verification now materializes the patched Minecraft Jar before checking the generated classpath.
+- The integrated-client PIP cache gate now measures a dedicated unchanged warmup window instead of comparing
+  cache reuse against legitimate redraws accumulated across the entire multi-screen scenario.
 - VS Code now starts JDT LS and Gradle import with Java 25, uses the stable Buildship importer, and verifies that
   its classpath points to the current `build.nosync` Minecraft Jar containing `Screen.class` instead of the
   retired `build/moddev` path.
-- GitHub Actions now installs Gradle 9.5.1 explicitly when publishing BenchMod development artifacts, instead of
-  invoking BenchMod's upstream wrapper checkout where `gradle-wrapper.jar` is not tracked.

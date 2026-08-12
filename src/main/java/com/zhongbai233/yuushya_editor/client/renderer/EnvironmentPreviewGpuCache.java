@@ -398,7 +398,7 @@ final class EnvironmentPreviewGpuCache implements AutoCloseable {
     void clear() {
         compilationEpoch++;
         activeCompilation = null;
-        sections.values().forEach(GpuSection::close);
+        for (GpuSection section : sections.values()) section.close();
         sections.clear();
         failedSources.clear();
         generation = 0L;
@@ -475,13 +475,13 @@ final class EnvironmentPreviewGpuCache implements AutoCloseable {
                 }
                 return new GpuSection(compiled.source().section(), compiled.source(), layers);
             } catch (Throwable failure) {
-                layers.values().forEach(GpuLayer::close);
+                for (GpuLayer layer : layers.values()) layer.close();
                 throw failure;
             }
         }
 
         @Override public void close() {
-            layers.values().forEach(GpuLayer::close);
+            for (GpuLayer layer : layers.values()) layer.close();
             layers.clear();
         }
     }
@@ -585,7 +585,7 @@ final class EnvironmentPreviewGpuCache implements AutoCloseable {
         }
 
         @Override public void close() {
-            vertices.values().forEach(UberGpuBuffer::close);
+            for (UberGpuBuffer<GpuLayer> buffer : vertices.values()) buffer.close();
             vertices.clear();
             translucentIndices.close();
         }

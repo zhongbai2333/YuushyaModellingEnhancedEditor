@@ -48,13 +48,6 @@ jobs:
       - name: Check out enhanced editor
         uses: actions/checkout@v4
 
-      - name: Check out BenchMod build dependency
-        uses: actions/checkout@v4
-        with:
-          repository: zhongbai2333/BenchMod
-          ref: 88b0f1d8f867480d208618ed0253de2fa0dddebe
-          path: .ci/BenchMod
-
       - name: Set up Java 25
         uses: actions/setup-java@v4
         with:
@@ -63,18 +56,10 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          # BenchMod's upstream checkout currently omits gradle-wrapper.jar, so provide the
-          # exact Gradle version declared by its wrapper properties for that included build.
-          gradle-version: "9.5.1"
 
       - name: Ensure project Gradle wrapper is executable
         shell: bash
         run: chmod +x ./gradlew
-
-      - name: Publish BenchMod development artifacts
-        shell: bash
-        run: gradle -p .ci/BenchMod publishToMavenLocal --no-daemon --stacktrace
 
       - name: Compute build metadata
         id: meta

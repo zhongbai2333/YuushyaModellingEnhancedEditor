@@ -23,7 +23,6 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.shapes.VoxelShape;
-import org.joml.Quaternionf;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
 
@@ -85,7 +84,7 @@ public final class Yuushya26EditorHost implements YuushyaEditorHost<Object> {
             rawLayers.put(id, raw);
             expectedHostData.put(id, blockState);
         }
-        expectedLayerIds = layers.stream().map(SceneLayer::id).toList();
+        expectedLayerIds = layerIds(layers);
         UUID selected = selectedSlot >= 0 && selectedSlot < layers.size() ? layers.get(selectedSlot).id() : null;
         return new SceneDocument<>(layers, selected, collisionShape);
     }
@@ -118,6 +117,12 @@ public final class Yuushya26EditorHost implements YuushyaEditorHost<Object> {
             }
         }
         return ValidationResult.ok();
+    }
+
+    private static List<UUID> layerIds(List<SceneLayer<Object>> layers) {
+        List<UUID> ids = new ArrayList<>(layers.size());
+        for (SceneLayer<Object> layer : layers) ids.add(layer.id());
+        return List.copyOf(ids);
     }
 
     @Override

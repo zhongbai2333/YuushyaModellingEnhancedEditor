@@ -174,9 +174,9 @@ public final class BlockPreviewPipRenderer extends PictureInPictureRenderer<Bloc
 
     private static Matrix4f previewMatrix(BlockPreviewLayer layer) {
         return switch (layer.content()) {
-            case BlockPreviewLayer.BlockContent ignored -> BlockPreviewTransform.matrix(layer.transform());
-            case BlockPreviewLayer.ItemContent ignored -> BlockPreviewTransform.itemMatrix(layer.transform());
-            case BlockPreviewLayer.TextContent ignored -> BlockPreviewTransform.textMatrix(layer.transform());
+            case BlockPreviewLayer.BlockContent _ -> BlockPreviewTransform.matrix(layer.transform());
+            case BlockPreviewLayer.ItemContent _ -> BlockPreviewTransform.itemMatrix(layer.transform());
+            case BlockPreviewLayer.TextContent _ -> BlockPreviewTransform.textMatrix(layer.transform());
         };
     }
 

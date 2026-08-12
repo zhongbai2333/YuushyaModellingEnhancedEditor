@@ -195,11 +195,12 @@ All seven steps are implemented for the three committed editor targets.
   duplicate `minecraft:glass` layers at `(0,0,0)`, the real Z-fighting optimize-and-save decision and its
   server-side epsilon offset, selected-layer visibility, near/far line-width compensation, the `NONE → FENCE`
   collision-shape transition on the server, a live environment block update, real ItemBlock deletion, and real
-  TextBlock content/culling/mirroring updates. It hard-asserts that unchanged PIP textures are reused more
-  often than rendered, model resolutions are a minority of edited instances, the shell is partly scattered, and
+  TextBlock content/culling/mirroring updates. It hard-asserts in a dedicated unchanged warmup window that PIP
+  textures are reused more often than rendered, that model resolutions are a minority of edited instances, the
+  shell is partly scattered, and
   persistent environment sections are rendered repeatedly after being compiled once. Environment capture also
-  has hard gates of 10 ms per bounded slice and 12 ms per client Tick. The latest verified run measured 3.77 ms
-  maximum slice, 5.25 ms maximum capture Tick, 7.38 ms mean, and 13.01 ms P95 MEASURE frame interval. The
+  has hard gates of 10 ms per bounded slice and 12 ms per client Tick. The latest verified run measured 3.17 ms
+  maximum slice, 4.85 ms maximum capture Tick, 4.18 ms mean, and 6.99 ms P95 MEASURE frame interval. The
   authoritative report is `build.nosync/modBench/raw-results/default/client/summary.json`; capture and invalidation
   counters are also captured in `artifacts/custom/yuushya-editor-performance.txt`.
 
@@ -208,14 +209,14 @@ All seven steps are implemented for the three committed editor targets.
 - `libs/yuushya_modelling-26.1.2-2.4.2.jar` is the default development `runtimeOnly` and Bench compile host. It is
   validated by version, required classes, and SHA-256 in `verifyYuushyaRuntime`, never shaded into the production
   Jar, and may be overridden only together with the audited `yuushya_runtime_sha256` property.
-- The sibling `BenchMod` project is consumed from Maven Local. Run `./gradlew publishToMavenLocal` there after a
-  fresh clone or BenchMod change.
+- BenchMod is pinned to the immutable JitPack `0.1.1` release. The plugin injects API and Runtime modules from
+  the same release, so no sibling checkout or Maven Local publication is required.
 - Run `./gradlew verifyYuushyaEditorBench` for the complete unattended client flow. Raw results live under
   `build.nosync/modBench/raw-results/default/client`; a portable collection is written to
   `build.nosync/modBench/bundles/default/client`.
 - Run `./gradlew releaseBuild --no-build-cache --no-configuration-cache` for a clean distributable Jar. The task rejects filesystem
   conflict copies such as `Screen 2.class`, Bench classes, and shaded Yuushya host classes; CI performs the same
-  flow after publishing a fresh checkout of BenchMod to Maven Local.
+  flow with the pinned JitPack BenchMod release.
 
 ## Yuushya main-project merge check
 

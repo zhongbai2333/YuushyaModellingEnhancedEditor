@@ -11,7 +11,6 @@ import com.zhongbai233.yuushya_editor.core.camera.CameraMode;
 import com.zhongbai233.yuushya_editor.core.camera.CameraState;
 import com.zhongbai233.yuushya_editor.core.projection.Viewport;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -59,7 +58,6 @@ public final class BlockPickerScreen extends Screen {
     protected void init() {
         int panelX = panelX();
         int panelY = panelY();
-        int panelWidth = panelWidth();
         searchBox = new EditBox(font, listX(), panelY + 28, listWidth(), 18,
                 Component.translatable("screen.yuushya_modelling_enhanced_editor.search_block"));
         searchBox.setHint(Component.translatable("screen.yuushya_modelling_enhanced_editor.search_block_hint"));
@@ -305,7 +303,7 @@ public final class BlockPickerScreen extends Screen {
             entries.add(new BlockEntry(block.defaultBlockState(), id, displayName,
                     (id + ' ' + displayName).toLowerCase(Locale.ROOT)));
         }
-        entries.sort(Comparator.comparing(BlockEntry::id));
+        entries.sort((left, right) -> left.id().compareTo(right.id()));
         return List.copyOf(entries);
     }
 

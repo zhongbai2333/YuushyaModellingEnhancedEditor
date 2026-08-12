@@ -55,6 +55,7 @@ import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -122,6 +123,7 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
         private static final BlockPos ENVIRONMENT_STONE_OFFSET = new BlockPos(3, -1, 2);
         private static final BlockPos ENVIRONMENT_GOLD_OFFSET = new BlockPos(-3, 0, -2);
         private static final int ENVIRONMENT_PLATFORM_RADIUS = 12;
+        private static final int PIP_CACHE_STABILITY_TICKS = 8;
         private static final long MAX_ENVIRONMENT_CAPTURE_SLICE_NANOS = 10_000_000L;
         private static final long MAX_ENVIRONMENT_CAPTURE_TICK_NANOS = 12_000_000L;
         private static final BlockPos ITEM_FIXTURE_OFFSET = new BlockPos(5, 0, 0);
@@ -177,6 +179,8 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
         private int environmentRetainedBlocks;
         private int environmentShellRetained;
         private int environmentShellCandidates;
+        private BlockPreviewPipRenderer.PerformanceSnapshot pipCacheWarmupStart;
+        private BlockPreviewPipRenderer.PerformanceSnapshot pipCacheWarmupEnd;
         private EnvironmentPreviewManager.PerformanceSnapshot environmentPerformance;
 
         @Override
@@ -253,8 +257,14 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
         @Override
         public BenchClientStepResult warmup(BenchClientContext context) {
             requireEnhancedScreen(context);
-            return ++warmupTicks >= 4
-                    ? BenchClientStepResult.COMPLETE : BenchClientStepResult.CONTINUE;
+            if (warmupTicks == 0) {
+                pipCacheWarmupStart = BlockPreviewPipRenderer.performanceSnapshot();
+            }
+            if (++warmupTicks < PIP_CACHE_STABILITY_TICKS) {
+                return BenchClientStepResult.CONTINUE;
+            }
+            pipCacheWarmupEnd = BlockPreviewPipRenderer.performanceSnapshot();
+            return BenchClientStepResult.COMPLETE;
         }
 
         @Override
@@ -602,9 +612,17 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
             }
             BlockPreviewPipRenderer.PerformanceSnapshot performance =
                     BlockPreviewPipRenderer.performanceSnapshot();
-            if (performance.reusedTextures() <= performance.renderedTextures()) {
-                throw new AssertionError("PIP texture cache did not eliminate most unchanged redraws: "
-                        + performance);
+            if (pipCacheWarmupStart == null || pipCacheWarmupEnd == null) {
+                throw new AssertionError("PIP texture cache stability window was not measured");
+            }
+            long stableRenderedTextures = pipCacheWarmupEnd.renderedTextures()
+                    - pipCacheWarmupStart.renderedTextures();
+            long stableReusedTextures = pipCacheWarmupEnd.reusedTextures()
+                    - pipCacheWarmupStart.reusedTextures();
+            if (stableReusedTextures <= stableRenderedTextures) {
+                throw new AssertionError("PIP texture cache did not eliminate most unchanged redraws during "
+                        + "the stable warmup window: rendered=" + stableRenderedTextures
+                        + ", reused=" + stableReusedTextures + ", overall=" + performance);
             }
             if (performance.modelCacheMisses() >= performance.submittedBlocks()) {
                 throw new AssertionError("BlockState model cache did not reduce model resolutions: " + performance);
@@ -619,6 +637,9 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                             + "workload.environmentEdgeDither=true\n"
                             + "pip.renderedTextures=" + performance.renderedTextures() + "\n"
                             + "pip.reusedTextures=" + performance.reusedTextures() + "\n"
+                            + "pip.stableWindowTicks=" + PIP_CACHE_STABILITY_TICKS + "\n"
+                            + "pip.stableRenderedTextures=" + stableRenderedTextures + "\n"
+                            + "pip.stableReusedTextures=" + stableReusedTextures + "\n"
                             + "blocks.submitted=" + performance.submittedBlocks() + "\n"
                             + "blocks.frustumCulled=" + performance.frustumCulledBlocks() + "\n"
                             + "models.cacheMisses=" + performance.modelCacheMisses() + "\n"
@@ -942,8 +963,10 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
         }
 
         private static void verifySnapshot(BenchScreenSnapshot snapshot) {
-            List<com.zhongbai233.bench.api.client.gui.BenchGuiNode> nodes = snapshot.flattened().stream()
-                    .filter(com.zhongbai233.bench.api.client.gui.BenchGuiNode::visible).toList();
+            List<com.zhongbai233.bench.api.client.gui.BenchGuiNode> nodes = new ArrayList<>();
+            for (com.zhongbai233.bench.api.client.gui.BenchGuiNode node : snapshot.flattened()) {
+                if (node.visible()) nodes.add(node);
+            }
             long editBoxes = nodes.stream().filter(node -> "edit-box".equals(node.role())).count();
             if (editBoxes != 7) throw new AssertionError("GUI snapshot expected 7 EditBoxes, found " + editBoxes);
             long ncpbThemeButtons = nodes.stream()
@@ -1148,11 +1171,16 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
         }
 
         private static void pressFirstWarningButton(ZFightWarningScreen warning) {
-            BlackGoldButton optimize = warning.children().stream()
-                    .filter(BlackGoldButton.class::isInstance)
-                    .map(BlackGoldButton.class::cast)
-                    .min(java.util.Comparator.comparingInt(BlackGoldButton::getX))
-                    .orElseThrow(() -> new AssertionError("Z-fighting warning has no action buttons"));
+            BlackGoldButton optimize = null;
+            for (var child : warning.children()) {
+                if (child instanceof BlackGoldButton button
+                        && (optimize == null || button.getX() < optimize.getX())) {
+                    optimize = button;
+                }
+            }
+            if (optimize == null) {
+                throw new AssertionError("Z-fighting warning has no action buttons");
+            }
             optimize.onPress(new MouseButtonEvent(optimize.getX() + optimize.getWidth() * 0.5D,
                     optimize.getY() + optimize.getHeight() * 0.5D,
                     new MouseButtonInfo(GLFW.GLFW_MOUSE_BUTTON_LEFT, 0)));
