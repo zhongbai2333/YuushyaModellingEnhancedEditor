@@ -1,0 +1,45 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "NeoForge: releaseBuild",
+			"type": "shell",
+			"command": "./gradlew",
+			"args": [
+				"releaseBuild",
+				"--no-build-cache",
+				"--no-configuration-cache"
+			],
+			"isBackground": false,
+			"problemMatcher": [
+				"$javac"
+			],
+			"group": "build"
+		},
+		{
+			"label": "NeoForge: sync IDE classpath",
+			"type": "shell",
+			"command": "./gradlew",
+			"args": ["eclipseClasspath", "verifyIdeClasspath"],
+			"isBackground": false,
+			"problemMatcher": ["$javac"]
+		},
+		{
+			"label": "NeoForge: test",
+			"type": "shell",
+			"command": "./gradlew",
+			"args": ["test"],
+			"isBackground": false,
+			"problemMatcher": ["$javac"],
+			"group": "test"
+		},
+		{
+			"label": "NeoForge: runClient",
+			"type": "shell",
+			"command": "./gradlew",
+			"args": ["runClient"],
+			"isBackground": true,
+			"problemMatcher": []
+		}
+	]
+}

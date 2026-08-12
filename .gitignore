@@ -1,0 +1,14 @@
+.gradle/
+build/
+build.nosync/
+run/
+out/
+bin/
+.eclipse/
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+.vscode/launch.json
+.DS_Store

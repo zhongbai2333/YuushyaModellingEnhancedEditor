@@ -1,0 +1,12 @@
+{
+  "required": false,
+  "minVersion": "0.8",
+  "package": "com.zhongbai233.yuushya_editor.mixin",
+  "compatibilityLevel": "JAVA_25",
+  "client": [
+    "ClientPacketListenerBlockUpdateMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 0
+  }
+}

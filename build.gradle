@@ -1,0 +1,357 @@
+plugins {
+    id 'java-library'
+    id 'maven-publish'
+    id 'idea'
+    id 'eclipse'
+    id 'net.neoforged.moddev' version '2.0.141'
+    id 'com.zhongbai233.minecraft-bench' version '0.1.0-SNAPSHOT'
+}
+
+// A release build must never restore stale compiler outputs from the local build cache.
+def releaseBuildRequested = gradle.startParameter.taskNames.any {
+    it == 'releaseBuild' || it.endsWith(':releaseBuild')
+}
+if (releaseBuildRequested) {
+    gradle.startParameter.buildCacheEnabled = false
+}
+
+version = mod_version
+group = mod_group_id
+
+base {
+    archivesName = mod_id
+}
+
+// This repository commonly lives in macOS Documents. Keeping generated outputs in a .nosync directory prevents
+// iCloud/File Provider from resurrecting conflict copies such as "Screen 2.class" after a clean build.
+layout.buildDirectory = layout.projectDirectory.dir('build.nosync')
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(25)
+
+idea {
+    module {
+        downloadSources = true
+        downloadJavadoc = true
+    }
+}
+
+eclipse {
+    classpath {
+        // ModBench declares its own source set; include it in the model imported by VS Code/Buildship.
+        sourceSets += [sourceSets.bench]
+        downloadSources = true
+        downloadJavadoc = true
+    }
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+neoForge {
+    version = project.neo_version
+
+    runs {
+        client {
+            client()
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
+        }
+
+        configureEach {
+            logLevel = org.slf4j.event.Level.INFO
+        }
+    }
+
+    mods {
+        "${mod_id}" {
+            sourceSet(sourceSets.main)
+        }
+    }
+}
+
+sourceSets.test.java.setSrcDirs(['src/test/java'])
+sourceSets.test.resources.setSrcDirs(['src/test/resources'])
+
+configurations {
+    testCompileOnly.extendsFrom(compileOnly)
+}
+
+def yuushyaRuntimeJar = providers.gradleProperty('yuushya_runtime_jar')
+def auditedYuushyaVersion = providers.gradleProperty('yuushya_modelling_version')
+def auditedYuushyaSha256 = providers.gradleProperty('yuushya_runtime_sha256')
+def projectDirectory = layout.projectDirectory.asFile
+def yuushyaRuntimeFile = yuushyaRuntimeJar.map { path ->
+    File candidate = new File(path)
+    candidate.absolute ? candidate : new File(projectDirectory, path)
+}
+
+dependencies {
+    api 'org.joml:joml:1.10.8'
+
+    // Development runtime only: Yuushya remains a separate required mod and is never shaded into this jar.
+    runtimeOnly files(yuushyaRuntimeFile)
+    // Bench providers compile against the audited host classes but remain outside the production Jar.
+    benchImplementation files(yuushyaRuntimeFile)
+
+    testImplementation platform('org.junit:junit-bom:5.13.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+tasks.register('verifyIdeClasspath') {
+    group = 'verification'
+    description = 'Checks the generated Eclipse/VS Code model for Java 25 and current ModDev artifacts.'
+    dependsOn tasks.named('eclipseClasspath')
+    inputs.file(layout.projectDirectory.file('.classpath'))
+    doLast {
+        File classpathFile = layout.projectDirectory.file('.classpath').asFile
+        if (!classpathFile.isFile()) {
+            throw new GradleException("IDE classpath was not generated: ${classpathFile}")
+        }
+        String classpath = classpathFile.getText('UTF-8').replace('\\\\', '/')
+        List<String> requiredFragments = [
+            'JavaSE-25',
+            'src/main/java',
+            'src/test/java',
+            'src/bench/java',
+            'build.nosync/moddev/artifacts/minecraft-patched-',
+            yuushyaRuntimeFile.get().canonicalPath.replace('\\\\', '/')
+        ]
+        List<String> missing = requiredFragments.findAll { !classpath.contains(it) }
+        if (!missing.isEmpty()) {
+            throw new GradleException("IDE classpath is incomplete; missing: ${missing}")
+        }
+        if (classpath.contains('/build/moddev/artifacts/minecraft-patched-')) {
+            throw new GradleException('IDE classpath still points at the retired build/moddev directory. '
+                    + 'Regenerate it with ./gradlew eclipseClasspath.')
+        }
+        java.util.regex.Matcher minecraftPath = classpath =~ /path="([^"]*build\.nosync\/moddev\/artifacts\/minecraft-patched-[^"]+\.jar)"/
+        if (!minecraftPath.find()) {
+            throw new GradleException('Could not locate the patched Minecraft Jar entry in the IDE classpath.')
+        }
+        File minecraftJar = new File(minecraftPath.group(1).replace('&amp;', '&'))
+        if (!minecraftJar.isFile()) {
+            throw new GradleException("IDE Minecraft Jar does not exist: ${minecraftJar}")
+        }
+        new java.util.zip.ZipFile(minecraftJar).withCloseable { archive ->
+            if (archive.getEntry('net/minecraft/client/gui/screens/Screen.class') == null) {
+                throw new GradleException("Patched Minecraft Jar does not contain Screen.class: ${minecraftJar}")
+            }
+        }
+    }
+}
+
+def verifyYuushyaRuntime = tasks.register('verifyYuushyaRuntime') {
+    group = 'verification'
+    description = 'Checks that the required Yuushya Modelling development runtime jar is available.'
+    inputs.files(files(yuushyaRuntimeFile))
+    doLast {
+        File runtimeJar = yuushyaRuntimeFile.get()
+        if (!runtimeJar.isFile()) {
+            throw new GradleException("Yuushya Modelling runtime jar not found: ${runtimeJar}. "
+                    + 'Set -Pyuushya_runtime_jar=/absolute/path/to/a-compatible-jar to override it.')
+        }
+        if (!runtimeJar.name.endsWith('.jar')) {
+            throw new GradleException("Yuushya runtime dependency is not a jar: ${runtimeJar}")
+        }
+        def digest = java.security.MessageDigest.getInstance('SHA-256')
+        runtimeJar.withInputStream { input ->
+            byte[] buffer = new byte[8192]
+            for (int read = input.read(buffer); read >= 0; read = input.read(buffer)) {
+                if (read > 0) digest.update(buffer, 0, read)
+            }
+        }
+        String actualSha256 = digest.digest().collect { String.format('%02x', it & 0xFF) }.join()
+        String expectedSha256 = auditedYuushyaSha256.get().toLowerCase(java.util.Locale.ROOT)
+        if (actualSha256 != expectedSha256) {
+            throw new GradleException("Yuushya runtime jar checksum mismatch: ${runtimeJar}. "
+                    + "Expected ${expectedSha256}, found ${actualSha256}. "
+                    + 'Override both -Pyuushya_runtime_jar and -Pyuushya_runtime_sha256 for another audited jar.')
+        }
+        List<String> requiredEntries = [
+            'META-INF/neoforge.mods.toml',
+            'com/yuushya/modelling/gui/showblock/ShowBlockScreen.class',
+            'com/yuushya/modelling/gui/itemblock/ItemBlockScreen.class',
+            'com/yuushya/modelling/gui/textblock/TextBlockScreen.class',
+            'com/yuushya/modelling/block/blockstate/YuushyaBlockStates.class',
+            'com/yuushya/modelling/blockentity/BlockShape.class',
+            'com/yuushya/modelling/blockentity/transformData/TransformBlockData.class',
+            'com/yuushya/modelling/blockentity/transformData/TransformType.class',
+            'com/yuushya/modelling/network/TransformDataOncePacket.class',
+            'com/yuushya/modelling/network/ItemTransformDataOncePacket.class',
+            'com/yuushya/modelling/network/TextTransformDataOncePacket.class',
+            'com/yuushya/modelling/network/ItemStackPacket.class',
+            'com/yuushya/modelling/network/TextLinesPacket.class'
+        ]
+        new java.util.zip.ZipFile(runtimeJar).withCloseable { archive ->
+            List<String> missing = requiredEntries.findAll { archive.getEntry(it) == null }
+            if (!missing.isEmpty()) {
+                throw new GradleException("Yuushya runtime jar is incompatible; missing entries: ${missing}")
+            }
+            String metadata = archive.getInputStream(archive.getEntry('META-INF/neoforge.mods.toml'))
+                    .getText('UTF-8')
+            String expectedVersion = auditedYuushyaVersion.get()
+            if (!(metadata =~ /(?m)^version\s*=\s*[\"']${java.util.regex.Pattern.quote(expectedVersion)}[\"']/)) {
+                throw new GradleException("Yuushya runtime jar is not the audited version ${expectedVersion}: "
+                        + runtimeJar)
+            }
+        }
+    }
+}
+
+tasks.named('runClient') {
+    dependsOn verifyYuushyaRuntime
+}
+
+modBench {
+    targetMod = mod_id
+    expectedProviderCount = 1
+    seed = 7
+    phaseTimeoutTicks = 1200
+    clientWorldPreset = 'void'
+    // Developer workstations commonly run the automated client in the background.
+    clientRequireWindowFocus = false
+}
+
+tasks.matching { it.name == 'runBenchClient' }.configureEach {
+    dependsOn verifyYuushyaRuntime
+}
+
+tasks.named('verifyBenchClientReport') {
+    mustRunAfter tasks.named('runBenchClient')
+    expectedScenarioId.set('yuushya-editor.overall-scale-apply')
+    expectedArtifactPaths.set([
+        'artifacts/screenshots/yuushya-editor-overall-scale.png',
+        'artifacts/screenshots/yuushya-editor-block-picker.png',
+        'artifacts/screenshots/yuushya-editor-added-glass-selected.png',
+        'artifacts/screenshots/yuushya-editor-zfight-warning.png',
+        'artifacts/screenshots/yuushya-editor-item-picker.png',
+        'artifacts/screenshots/yuushya-editor-far-line-width.png',
+        'artifacts/gui/yuushya-editor-overall-scale-control.png',
+        'artifacts/custom/yuushya-editor-gui.txt',
+        'artifacts/custom/yuushya-editor-render-layers.txt',
+        'artifacts/custom/yuushya-editor-performance.txt',
+        'artifacts/custom/yuushya-overall-scale-verification.txt',
+        'artifacts/samples/yuushya-editor.overall-scale-apply.jsonl'
+    ])
+    expectedMetricNames.set(['client.frame.interval'])
+    expectedLoadedModIds.set([
+        'minecraft', 'neoforge', mod_id, 'yuushya_modelling', 'modbench_runtime'
+    ])
+}
+
+tasks.register('verifyYuushyaEditorBench') {
+    group = 'verification'
+    description = 'Runs and verifies the unattended real Yuushya editor client scenario.'
+    dependsOn 'runBenchClient', 'verifyBenchClientReport'
+}
+
+def productionJar = tasks.named('jar', Jar).flatMap { it.archiveFile }
+
+def verifyProductionJar = tasks.register('verifyProductionJar') {
+    group = 'verification'
+    description = 'Rejects stale, benchmark, host-mod, or otherwise unsafe content in the production Jar.'
+    dependsOn tasks.named('jar')
+    inputs.file(productionJar)
+    doLast {
+        File archiveFile = productionJar.get().asFile
+        List<String> rejected = []
+        new java.util.zip.ZipFile(archiveFile).withCloseable { archive ->
+            archive.entries().each { entry ->
+                String name = entry.name
+                boolean staleClass = name ==~ /(?:^|.*\/)[^\/]*\s+\d+\.class/
+                boolean benchContent = name.startsWith('com/zhongbai233/yuushya_editor/bench/')
+                        || name.toLowerCase(java.util.Locale.ROOT).contains('modbench')
+                boolean shadedYuushya = name.startsWith('com/yuushya/')
+                if (staleClass || benchContent || shadedYuushya) rejected.add(name)
+            }
+        }
+        if (!rejected.isEmpty()) {
+            throw new GradleException("Production Jar contains rejected entries:\n - "
+                    + rejected.sort().join('\n - ')
+                    + '\nRun ./gradlew releaseBuild --no-build-cache --no-configuration-cache '
+                    + 'to rebuild from a clean output directory.')
+        }
+    }
+}
+
+def languageFiles = files(
+        'src/main/resources/assets/yuushya_modelling_enhanced_editor/lang/en_us.json',
+        'src/main/resources/assets/yuushya_modelling_enhanced_editor/lang/zh_cn.json')
+
+def verifyLanguageKeys = tasks.register('verifyLanguageKeys') {
+    group = 'verification'
+    description = 'Checks that the English and Chinese translations expose exactly the same keys.'
+    inputs.files(languageFiles)
+    doLast {
+        def parser = new groovy.json.JsonSlurper()
+        Map<String, ?> english = (Map<String, ?>) parser.parse(languageFiles.files.find { it.name == 'en_us.json' })
+        Map<String, ?> chinese = (Map<String, ?>) parser.parse(languageFiles.files.find { it.name == 'zh_cn.json' })
+        Set<String> missingChinese = new TreeSet<>(english.keySet())
+        missingChinese.removeAll(chinese.keySet())
+        Set<String> missingEnglish = new TreeSet<>(chinese.keySet())
+        missingEnglish.removeAll(english.keySet())
+        if (!missingChinese.isEmpty() || !missingEnglish.isEmpty()) {
+            throw new GradleException('Translation keys differ. Missing in zh_cn: '
+                    + missingChinese + '; missing in en_us: ' + missingEnglish)
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn verifyProductionJar, verifyLanguageKeys
+}
+
+tasks.register('releaseBuild') {
+    group = 'build'
+    description = 'Builds a distributable Jar from clean, non-cached compiler output and verifies it.'
+    notCompatibleWithConfigurationCache('releaseBuild intentionally coordinates clean and build in one invocation')
+    dependsOn tasks.named('clean'), tasks.named('build'), verifyYuushyaRuntime
+}
+
+tasks.named('clean', Delete) {
+    // Remove outputs created before buildDirectory moved to build.nosync.
+    delete layout.projectDirectory.dir('build')
+}
+
+tasks.named('build') {
+    mustRunAfter tasks.named('clean')
+}
+verifyYuushyaRuntime.configure {
+    mustRunAfter tasks.named('clean')
+}
+
+tasks.withType(JavaCompile).configureEach {
+    // Local Gradle caches can preserve filesystem conflict copies such as "Screen 2.class" forever.
+    // Compilation is small; keep expensive Minecraft artifacts cached but always materialize canonical class names.
+    outputs.cacheIf('Java class output directories must contain only canonical compiler filenames') { false }
+    options.encoding = 'UTF-8'
+    options.compilerArgs.add('-Xlint:all')
+}
+
+var generateModMetadata = tasks.register('generateModMetadata', ProcessResources) {
+    var replaceProperties = [
+        minecraft_version_range: minecraft_version_range,
+        neo_version_range: neo_version_range,
+        loader_version_range: loader_version_range,
+        mod_id: mod_id,
+        mod_name: mod_name,
+        mod_license: mod_license,
+        mod_version: mod_version,
+        mod_authors: mod_authors,
+        mod_description: mod_description,
+        yuushya_version_range: yuushya_modelling_version_range
+    ]
+    inputs.properties replaceProperties
+    expand replaceProperties
+    from 'src/main/templates'
+    into layout.buildDirectory.dir('generated/sources/modMetadata')
+}
+
+sourceSets.main.resources.srcDir generateModMetadata
+neoForge.ideSyncTask generateModMetadata
