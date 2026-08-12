@@ -44,7 +44,7 @@ Git tag 使用 `v<version>`，例如 `v0.1.0-alpha`。tag 中去掉前导 `v` �
 yuushya_modelling_enhanced_editor-<version>+mc26.1.2-neoforge.jar
 ```
 
-`.github/workflows/bench.yml` 是真实客户端验收。它支持手动触发，并在定时或 `master` 相关改动时运行；报告和截图无论成功失败都上传，便于定位渲染回归。该工作不参与 tag 发布制品打包。
+真实客户端 Bench 已并入 `.github/workflows/ci.yml` 的 Release 流程，只在推送 `v*` tag 时运行。生产构建通过后才启动 Bench，Bench 也通过后才创建 GitHub Release；这样构建失败时不会浪费客户端验收资源。Bench 报告和截图无论成功失败都会上传。普通 PR 和 `master` 推送只运行生产构建，不会启动耗时的客户端验收。
 
 ## 发布 tag
 

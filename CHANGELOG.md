@@ -14,12 +14,14 @@ All notable changes to this project will be documented in this file.
 - Real integrated-client ModBench acceptance coverage and environment capture performance gates.
 - Clean release, production Jar integrity, runtime SHA-256, translation-key, and GitHub CI verification.
 - User, development, release, contribution, security, and project-handoff documentation.
-- NCPB-style CI artifacts with SHA-256 files, tag releases, and a separate integrated-client Bench workflow.
+- NCPB-style CI artifacts with SHA-256 files, tag releases, and integrated-client release gating.
 
 ### Changed
 
 - BenchMod is now pinned to the immutable JitPack `0.1.1` release; local builds and CI no longer clone and
   publish a separate BenchMod checkout to Maven Local.
+- CI now runs once per pull request or `master` update; the heavier integrated-client Bench is a `v*` release
+  gate and must pass alongside the production build before GitHub publishes the release.
 - Environment capture now yields every 32 cells instead of after a complete 20×20 neighborhood plane.
 - Minecraft and NeoForge metadata ranges are pinned to the audited 26.1.2 / 26.1.2.76 versions.
 - Non-essential environment invalidation Mixins are optional; editor binding also falls back on linkage errors.
