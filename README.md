@@ -74,7 +74,7 @@ Yuushya Townscape 的 Mod ID 是 `yuushya`，Yuushya Modelling 的 Mod ID 是 `y
 ./gradlew verifyYuushyaEditorBench --no-daemon
 ```
 
-ModBench Gradle 插件和运行时固定使用 [BenchMod 0.1.1](https://github.com/zhongbai2333/BenchMod/tree/0.1.1)，
+ModBench Gradle 插件和运行时固定使用 [BenchMod 0.1.2](https://github.com/zhongbai2333/BenchMod/tree/0.1.2)，
 由 JitPack 自动解析，无需预先克隆或发布到 Maven Local。
 
 开发环境、VS Code 修复和 Gradle 任务详见 [开发指南](docs/development.md)；发版规则见 [发布指南](docs/release.md)。

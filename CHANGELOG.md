@@ -18,12 +18,13 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- BenchMod is now pinned to the immutable JitPack `0.1.1` release; local builds and CI no longer clone and
+- BenchMod is now pinned to the immutable JitPack `0.1.2` release; local builds and CI no longer clone and
   publish a separate BenchMod checkout to Maven Local.
 - CI now runs once per pull request or `master` update; the heavier integrated-client Bench is a `v*` release
   gate and must pass alongside the production build before GitHub publishes the release.
 - Environment capture now yields every 32 cells instead of after a complete 20×20 neighborhood plane.
-- Minecraft and NeoForge metadata ranges are pinned to the audited 26.1.2 / 26.1.2.76 versions.
+- Build inputs remain pinned to the audited Minecraft 26.1.2 / NeoForge 26.1.2.76 toolchain, while published
+  metadata accepts Minecraft `[26.1.2,27)` and NeoForge `[26,)`, matching NCPB's compatibility policy.
 - Non-essential environment invalidation Mixins are optional; editor binding also falls back on linkage errors.
 - Yuushya 2.4.2's empty `CUSTOM` collision placeholder remains readable but is no longer created by cycling the
   editable collision presets.

@@ -270,8 +270,8 @@ def verifyProductionJar = tasks.register('verifyProductionJar') {
             archive.entries().each { entry ->
                 String name = entry.name
                 boolean staleClass = name ==~ /(?:^|.*\/)[^\/]*\s+\d+\.class/
-                boolean benchContent = name.startsWith('com/zhongbai233/yuushya_editor/bench/')
-                        || name.toLowerCase(java.util.Locale.ROOT).contains('modbench')
+                boolean benchContent = name.startsWith('com/zhongbai233/yuushya_editor/bench/') ||
+                        name.toLowerCase(java.util.Locale.ROOT).contains('modbench')
                 boolean shadedYuushya = name.startsWith('com/yuushya/')
                 if (staleClass || benchContent || shadedYuushya) rejected.add(name)
             }

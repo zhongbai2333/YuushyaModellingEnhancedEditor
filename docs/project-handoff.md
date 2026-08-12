@@ -209,7 +209,7 @@ All seven steps are implemented for the three committed editor targets.
 - `libs/yuushya_modelling-26.1.2-2.4.2.jar` is the default development `runtimeOnly` and Bench compile host. It is
   validated by version, required classes, and SHA-256 in `verifyYuushyaRuntime`, never shaded into the production
   Jar, and may be overridden only together with the audited `yuushya_runtime_sha256` property.
-- BenchMod is pinned to the immutable JitPack `0.1.1` release. The plugin injects API and Runtime modules from
+- BenchMod is pinned to the immutable JitPack `0.1.2` release. The plugin injects API and Runtime modules from
   the same release, so no sibling checkout or Maven Local publication is required.
 - Run `./gradlew verifyYuushyaEditorBench` for the complete unattended client flow. Raw results live under
   `build.nosync/modBench/raw-results/default/client`; a portable collection is written to

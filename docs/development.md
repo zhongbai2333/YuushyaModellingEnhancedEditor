@@ -6,7 +6,7 @@
 - Gradle Wrapper 9.5.0。
 - Minecraft 26.1.2、NeoForge 26.1.2.76。
 - 仓库内审计过的 Yuushya Modelling 2.4.2 开发 Jar。
-- 通过 JitPack 固定解析的 BenchMod `0.1.1` Gradle 插件、API 和 Runtime。
+- 通过 JitPack 固定解析的 BenchMod `0.1.2` Gradle 插件、API 和 Runtime。
 
 初始化项目：
 
@@ -19,7 +19,7 @@
 
 仓库提交 `.vscode/settings.json` 和可移植的 `.vscode/tasks.json`，但忽略 NeoForge 自动生成且包含本机绝对路径的 `.vscode/launch.json`。
 
-本项目的 ModBench Gradle 插件要求 Java 25，并从 JitPack `0.1.1` 解析。当前 Java 扩展的 Gradle Build Server 可能在语言服务器切换运行时前用内置 Java 21 导入项目，导致插件解析失败；失败后 JDT 又可能保留旧 `build/moddev` 路径，而项目输出实际位于 `build.nosync/moddev`。工作区配置因此：
+本项目的 ModBench Gradle 插件要求 Java 25，并从 JitPack `0.1.2` 解析。当前 Java 扩展的 Gradle Build Server 可能在语言服务器切换运行时前用内置 Java 21 导入项目，导致插件解析失败；失败后 JDT 又可能保留旧 `build/moddev` 路径，而项目输出实际位于 `build.nosync/moddev`。工作区配置因此：
 
 - 用 `java.jdt.ls.java.home` 从 Java 25 启动语言服务器；
 - 用 `java.import.gradle.java.home` 让 Gradle 导入使用 Java 25；
