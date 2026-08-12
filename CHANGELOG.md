@@ -31,3 +31,5 @@ All notable changes to this project will be documented in this file.
 - VS Code now starts JDT LS and Gradle import with Java 25, uses the stable Buildship importer, and verifies that
   its classpath points to the current `build.nosync` Minecraft Jar containing `Screen.class` instead of the
   retired `build/moddev` path.
+- GitHub Actions now installs Gradle 9.5.1 explicitly when publishing BenchMod development artifacts, instead of
+  invoking BenchMod's upstream wrapper checkout where `gradle-wrapper.jar` is not tracked.

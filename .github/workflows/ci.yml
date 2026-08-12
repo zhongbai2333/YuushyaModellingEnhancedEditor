@@ -63,14 +63,18 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          # BenchMod's upstream checkout currently omits gradle-wrapper.jar, so provide the
+          # exact Gradle version declared by its wrapper properties for that included build.
+          gradle-version: "9.5.1"
 
-      - name: Ensure Gradle wrappers are executable
+      - name: Ensure project Gradle wrapper is executable
         shell: bash
-        run: chmod +x ./gradlew ./.ci/BenchMod/gradlew
+        run: chmod +x ./gradlew
 
       - name: Publish BenchMod development artifacts
         shell: bash
-        run: ./.ci/BenchMod/gradlew -p .ci/BenchMod publishToMavenLocal --no-daemon
+        run: gradle -p .ci/BenchMod publishToMavenLocal --no-daemon --stacktrace
 
       - name: Compute build metadata
         id: meta

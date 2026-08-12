@@ -31,7 +31,8 @@ Git tag 使用 `v<version>`，例如 `v0.1.0-alpha`。tag 中去掉前导 `v` �
 `.github/workflows/ci.yml` 在 `master`、`dev`、`v*` tag、Pull Request 和手动触发时运行。它会：
 
 1. 检出本项目和 BenchMod；
-2. 使用 Java 25 发布 BenchMod SNAPSHOT 到 Maven Local；
+2. 使用 Java 25 和 BenchMod wrapper 属性声明的 Gradle 9.5.1 发布 SNAPSHOT 到 Maven Local；由于上游
+   当前没有提交 `gradle-wrapper.jar`，CI 由 `setup-gradle` 提供该版本，不调用缺少 Jar 的上游 wrapper；
 3. 校验 Gradle Wrapper、IDE classpath、测试、翻译、宿主 Jar 和生产 Jar；
 4. 从 `build.nosync/libs/` 复制唯一生产 Jar；
 5. 生成统一文件名和 `.sha256`；

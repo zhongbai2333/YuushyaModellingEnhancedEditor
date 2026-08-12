@@ -51,6 +51,10 @@ jobs:
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          # BenchMod's upstream checkout currently omits gradle-wrapper.jar, so provide the
+          # exact Gradle version declared by its wrapper properties for that included build.
+          gradle-version: "9.5.1"
 
       - name: Install headless OpenGL runtime
         shell: bash
@@ -61,8 +65,8 @@ jobs:
       - name: Publish BenchMod development artifacts
         shell: bash
         run: |
-          chmod +x ./gradlew ./.ci/BenchMod/gradlew
-          ./.ci/BenchMod/gradlew -p .ci/BenchMod publishToMavenLocal --no-daemon
+          chmod +x ./gradlew
+          gradle -p .ci/BenchMod publishToMavenLocal --no-daemon --stacktrace
 
       - name: Run integrated client acceptance
         shell: bash
