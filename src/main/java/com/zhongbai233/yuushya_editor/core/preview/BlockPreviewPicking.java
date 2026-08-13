@@ -1,7 +1,7 @@
 package com.zhongbai233.yuushya_editor.core.preview;
 
 import com.zhongbai233.yuushya_editor.core.EditorTransform;
-import com.zhongbai233.yuushya_editor.core.projection.PickingRay;
+import com.zhongbai233.scene_editor.core.projection.PickingRay;
 import java.util.Objects;
 import java.util.OptionalDouble;
 import org.joml.Matrix4f;

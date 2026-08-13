@@ -60,6 +60,10 @@
   "screen.yuushya_modelling_enhanced_editor.collision": "碰撞箱 · %s",
   "screen.yuushya_modelling_enhanced_editor.collision_short": "箱",
   "screen.yuushya_modelling_enhanced_editor.replace_item": "编辑物品内容与渲染",
+  "screen.yuushya_modelling_enhanced_editor.edit_block_state": "编辑方块属性",
+  "screen.yuushya_modelling_enhanced_editor.block_state_editor.title": "方块属性设置",
+  "screen.yuushya_modelling_enhanced_editor.block_state_editor.properties": "方块状态属性",
+  "screen.yuushya_modelling_enhanced_editor.block_state_editor.no_properties": "此方块没有可调整的属性",
   "screen.yuushya_modelling_enhanced_editor.item_editor.title": "物品图层设置",
   "screen.yuushya_modelling_enhanced_editor.item_editor.replace": "更换物品",
   "screen.yuushya_modelling_enhanced_editor.item_editor.render_mode": "渲染模式：%s",
@@ -131,6 +135,5 @@
   "screen.yuushya_modelling_enhanced_editor.zfight.note": "检测使用方块状态的外轮廓体素面；只接触边/顶点及组合形状内部接缝不算冲突。",
   "screen.yuushya_modelling_enhanced_editor.validation.layer_block": "第 %s 层不是 Minecraft 方块状态",
   "screen.yuushya_modelling_enhanced_editor.validation.layer_type": "第 %s 层不是%s数据",
-  "screen.yuushya_modelling_enhanced_editor.validation.order": "Yuushya 原有层可以删除，但不能重新排序",
-  "screen.yuushya_modelling_enhanced_editor.validation.replace": "当前不允许替换原有方块状态"
+  "screen.yuushya_modelling_enhanced_editor.validation.order": "Yuushya 原有层可以删除，但不能重新排序"
 }

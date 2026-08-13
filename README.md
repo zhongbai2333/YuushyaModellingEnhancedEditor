@@ -32,6 +32,7 @@
 | Minecraft | `[26.1.2,27)` | `26.1.2` | 客户端与服务端 |
 | NeoForge | `[26,)` | `26.1.2.76` | 客户端与服务端 |
 | Yuushya Modelling | `[2.4.2]` | `2.4.2` | 客户端与服务端 |
+| Scene Editor Core | Gradle 中声明的兼容区间 | 当前构建版本 | 由本项目 JiJ，无需单独安装 |
 | Java | `25` | `25` | 开发、构建和测试 |
 
 Yuushya Townscape 的 Mod ID 是 `yuushya`，Yuushya Modelling 的 Mod ID 是 `yuushya_modelling`；在已审计的 26.1 分支和 26.1.2 客户端中它们仍是两个独立 Mod。本项目依赖后者，Townscape 只是可选内容，不包含这里需要的建模界面类。
@@ -41,7 +42,7 @@ Yuushya Townscape 的 Mod ID 是 `yuushya`，Yuushya Modelling 的 Mod ID 是 `y
 1. 安装 Minecraft `26.1.2` 和 NeoForge `26.1.2.76`。
 2. 客户端 `mods` 目录同时放入 Yuushya Modelling `2.4.2` 与本项目发布 Jar。
 3. 联机时，服务端也必须安装 Yuushya Modelling；服务端不需要本增强编辑器。
-4. 不要把仓库内 `libs/` 的审计开发 Jar 当作本项目发布物，也不要把它与增强编辑器 Jar 合并。
+4. Scene Editor Core 已包含在本项目发布 Jar 中，不需要额外下载；不要把仓库内 `libs/` 的审计开发 Jar 当作发布物。
 
 更完整的操作流程、快捷键和排错方式见 [用户指南](docs/user-guide.md)。
 
@@ -64,7 +65,7 @@ Yuushya Townscape 的 Mod ID 是 `yuushya`，Yuushya Modelling 的 Mod ID 是 `y
 ## 验证状态
 
 - 完整单元测试通过；
-- 干净发布构建会校验 Yuushya 开发 Jar 的版本与 SHA-256，并拒绝混入 Bench、Yuushya 本体或冲突 class 的制品；
+- 干净发布构建会校验 Yuushya 开发 Jar 的版本与 SHA-256、Scene Editor JiJ 版本区间和嵌套 API，并拒绝混入 Bench、Yuushya 本体、已迁出的编辑器副本或冲突 class；
 - 真实 Minecraft + NeoForge + Yuushya + ModBench 客户端场景通过，覆盖三类编辑器、文本多行编辑/新增/背面选项、物品方块状态与颜色回写、检查器及 Gizmo 的逐轴缩放隔离、自动保存、删除、碰撞箱、Z-fighting、环境渲染和局部缓存失效；
 - Bench 对环境采集切片、单 Tick 开销、渲染缓存复用和帧间隔设置硬门槛；具体测量值保存在每次运行生成的报告中，不在文档中固化单机结果。
 
@@ -98,7 +99,8 @@ ModBench Gradle 插件和运行时固定使用 [BenchMod 0.1.2](https://github.c
 
 ## 上游与许可证
 
-- 编辑器交互模型提取并改编自 NCPB；其首个共享 editor-core 实现在提交 `be964ac` 中引入。
+- 通用相机、投影、选择、Gizmo 和历史能力来自独立的 [SceneEditor](https://github.com/zhongbai2333/SceneEditor)，并以 JiJ 方式随本项目发布；Yuushya 专用数据、渲染和保存适配仍由本项目维护。
+- SceneEditor 的交互模型提取并改编自 NCPB；其首个共享 editor-core 实现在提交 `be964ac` 中引入。
 - Yuushya 适配审计锚点是 `Yuushya-Modelling` 的 `26.1` 分支提交 `57f4d86407510f76191e35c280d8e1c8d347bf42`。
 - Yuushya Townscape 26.1 的独立性检查锚点为 `3478bb99b3a1b2bb7df7dd8a974364c12e49f410`。
 

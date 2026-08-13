@@ -2,12 +2,12 @@ package com.zhongbai233.yuushya_editor.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import com.zhongbai233.yuushya_editor.core.gizmo.GizmoConstraint;
-import com.zhongbai233.yuushya_editor.core.gizmo.GizmoDragMath;
-import com.zhongbai233.yuushya_editor.core.gizmo.GizmoSizingPolicy;
-import com.zhongbai233.yuushya_editor.core.command.CommandStack;
-import com.zhongbai233.yuushya_editor.core.command.DragTransaction;
-import com.zhongbai233.yuushya_editor.core.projection.PickingRay;
+import com.zhongbai233.scene_editor.core.gizmo.GizmoConstraint;
+import com.zhongbai233.scene_editor.core.gizmo.GizmoDragMath;
+import com.zhongbai233.scene_editor.core.gizmo.GizmoSizingPolicy;
+import com.zhongbai233.scene_editor.core.command.CommandStack;
+import com.zhongbai233.scene_editor.core.transaction.DragTransaction;
+import com.zhongbai233.scene_editor.core.projection.PickingRay;
 import org.joml.Vector3d;
 import org.junit.jupiter.api.Test;
 

@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Complete block-state property menu for modeled block layers, including facing, shape and waterlogged values,
+  with undoable Yuushya-native `BLOCK_STATE` synchronization.
 - NCPB-derived block, item, and text scene editing for Yuushya Modelling 2.4.2.
 - Six-direction move and rotation Gizmos plus independent X/Y/Z scale handles with modifier-aware snapping.
 - Exit autosave, deletion, undo/redo, collision presets, and save-time Z-fighting detection.
@@ -21,6 +23,9 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Reusable camera, projection, selection, Gizmo, command-history, cursor-wrap, and inactive-session logic now
+  comes from SceneEditor Core and is bundled through NeoForge JiJ; the production verifier rejects local duplicate
+  classes and validates the negotiated library range and nested interaction API.
 - The project has entered beta testing; the current project version now has a single source of truth in
   `gradle.properties`, while documentation uses stable placeholders and release-channel wording.
 - BenchMod is now pinned to the immutable JitPack `0.1.2` release; local builds and CI no longer clone and

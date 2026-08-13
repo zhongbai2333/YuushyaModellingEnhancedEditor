@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.zhongbai233.yuushya_editor.core.preview.BlockPreviewPicking;
-import com.zhongbai233.yuushya_editor.core.projection.PickingRay;
+import com.zhongbai233.scene_editor.core.projection.PickingRay;
 import java.util.OptionalDouble;
 import org.joml.Quaternionf;
 import org.joml.Vector3d;

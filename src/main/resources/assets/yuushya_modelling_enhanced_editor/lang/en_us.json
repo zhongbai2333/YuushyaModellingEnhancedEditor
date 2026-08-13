@@ -60,6 +60,10 @@
   "screen.yuushya_modelling_enhanced_editor.collision": "Collision: %s",
   "screen.yuushya_modelling_enhanced_editor.collision_short": "Box",
   "screen.yuushya_modelling_enhanced_editor.replace_item": "Edit item content and rendering",
+  "screen.yuushya_modelling_enhanced_editor.edit_block_state": "Edit block properties",
+  "screen.yuushya_modelling_enhanced_editor.block_state_editor.title": "Block Properties",
+  "screen.yuushya_modelling_enhanced_editor.block_state_editor.properties": "Block-state properties",
+  "screen.yuushya_modelling_enhanced_editor.block_state_editor.no_properties": "This block has no editable properties",
   "screen.yuushya_modelling_enhanced_editor.item_editor.title": "Item Layer Settings",
   "screen.yuushya_modelling_enhanced_editor.item_editor.replace": "Replace item",
   "screen.yuushya_modelling_enhanced_editor.item_editor.render_mode": "Render mode: %s",
@@ -131,6 +135,5 @@
   "screen.yuushya_modelling_enhanced_editor.zfight.note": "Detection uses exterior voxel-shape faces; edge/vertex contact and internal seams are not conflicts.",
   "screen.yuushya_modelling_enhanced_editor.validation.layer_block": "Layer %s is not a Minecraft BlockState",
   "screen.yuushya_modelling_enhanced_editor.validation.layer_type": "Layer %s is not %s data",
-  "screen.yuushya_modelling_enhanced_editor.validation.order": "Existing Yuushya layers may be deleted but not reordered",
-  "screen.yuushya_modelling_enhanced_editor.validation.replace": "Existing block-state replacement is not enabled"
+  "screen.yuushya_modelling_enhanced_editor.validation.order": "Existing Yuushya layers may be deleted but not reordered"
 }

@@ -5,11 +5,11 @@ import com.zhongbai233.yuushya_editor.client.renderer.BlockPreviewPipRenderState
 import com.zhongbai233.yuushya_editor.client.widget.BlackGoldButton;
 import com.zhongbai233.yuushya_editor.client.widget.BlackGoldUi;
 import com.zhongbai233.yuushya_editor.core.EditorTransform;
-import com.zhongbai233.yuushya_editor.core.camera.CameraFrame;
-import com.zhongbai233.yuushya_editor.core.camera.CameraMatrices;
-import com.zhongbai233.yuushya_editor.core.camera.CameraMode;
-import com.zhongbai233.yuushya_editor.core.camera.CameraState;
-import com.zhongbai233.yuushya_editor.core.projection.Viewport;
+import com.zhongbai233.scene_editor.core.camera.CameraFrame;
+import com.zhongbai233.scene_editor.core.camera.CameraMatrices;
+import com.zhongbai233.scene_editor.core.camera.EditorCameraMode;
+import com.zhongbai233.scene_editor.core.camera.EditorCameraState;
+import com.zhongbai233.scene_editor.core.projection.EditorViewport;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -111,8 +111,8 @@ public final class BlockPickerScreen extends Screen {
             return;
         }
 
-        Viewport viewport = new Viewport(x + 1, y + 1, Math.max(1, size - 2), Math.max(1, size - 2));
-        CameraState camera = CameraState.lookingAt(CameraMode.PERSPECTIVE,
+        EditorViewport viewport = new EditorViewport(x + 1, y + 1, Math.max(1, size - 2), Math.max(1, size - 2));
+        EditorCameraState camera = EditorCameraState.lookingAt(EditorCameraMode.ORBIT,
                 new Vector3d(2.5D, 2.0D, 3.0D), new Vector3d(), WORLD_UP,
                 38.0F, 3.0F, 0.05F, 100.0F);
         CameraFrame frame = new CameraFrame(CameraMatrices.create(camera, viewport), viewport, camera.mode());

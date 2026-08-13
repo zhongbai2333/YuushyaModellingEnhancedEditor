@@ -2,6 +2,7 @@ package com.zhongbai233.yuushya_editor.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import com.zhongbai233.scene_editor.core.selection.MultiSelectionPolicy;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -14,37 +15,37 @@ class LayerSelectionTest {
 
     @Test
     void controlClickKeepsTheOnlySelectedLayer() {
-        LayerSelection.Result result = LayerSelection.click(
+        MultiSelectionPolicy.Result result = MultiSelectionPolicy.click(
                 ordered, List.of(second), second, second, false, true);
 
-        assertEquals(List.of(second), result.selectedLayerIds());
-        assertEquals(second, result.primaryLayerId());
+        assertEquals(List.of(second), result.selectedElementIds());
+        assertEquals(second, result.primaryElementId());
     }
 
     @Test
     void controlClickRemovesPrimaryAndPromotesMostRecentlySelectedLayer() {
-        LayerSelection.Result result = LayerSelection.click(
+        MultiSelectionPolicy.Result result = MultiSelectionPolicy.click(
                 ordered, List.of(first, second, third), third, third, false, true);
 
-        assertEquals(List.of(first, second), result.selectedLayerIds());
-        assertEquals(second, result.primaryLayerId());
+        assertEquals(List.of(first, second), result.selectedElementIds());
+        assertEquals(second, result.primaryElementId());
     }
 
     @Test
     void controlClickOnUnselectedLayerAddsAndMakesItPrimary() {
-        LayerSelection.Result result = LayerSelection.click(
+        MultiSelectionPolicy.Result result = MultiSelectionPolicy.click(
                 ordered, List.of(first), first, third, false, true);
 
-        assertEquals(List.of(first, third), result.selectedLayerIds());
-        assertEquals(third, result.primaryLayerId());
+        assertEquals(List.of(first, third), result.selectedElementIds());
+        assertEquals(third, result.primaryElementId());
     }
 
     @Test
     void shiftClickReplacesSelectionWithContiguousRange() {
-        LayerSelection.Result result = LayerSelection.click(
+        MultiSelectionPolicy.Result result = MultiSelectionPolicy.click(
                 ordered, List.of(first), first, third, true, false);
 
-        assertEquals(ordered, result.selectedLayerIds());
-        assertEquals(third, result.primaryLayerId());
+        assertEquals(ordered, result.selectedElementIds());
+        assertEquals(third, result.primaryElementId());
     }
 }

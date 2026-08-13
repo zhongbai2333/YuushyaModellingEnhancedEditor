@@ -1,8 +1,8 @@
 package com.zhongbai233.yuushya_editor.core;
 
 import static org.junit.jupiter.api.Assertions.*;
-import com.zhongbai233.yuushya_editor.core.command.CommandStack;
-import com.zhongbai233.yuushya_editor.core.command.DragTransaction;
+import com.zhongbai233.scene_editor.core.command.CommandStack;
+import com.zhongbai233.scene_editor.core.transaction.DragTransaction;
 import org.junit.jupiter.api.Test;
 
 class CommandStackTest {

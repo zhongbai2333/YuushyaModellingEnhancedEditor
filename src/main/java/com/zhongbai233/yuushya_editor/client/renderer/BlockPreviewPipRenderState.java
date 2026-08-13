@@ -1,6 +1,6 @@
 package com.zhongbai233.yuushya_editor.client.renderer;
 
-import com.zhongbai233.yuushya_editor.core.camera.CameraFrame;
+import com.zhongbai233.scene_editor.core.camera.CameraFrame;
 import com.zhongbai233.yuushya_editor.client.environment.EnvironmentPreviewFrame;
 import com.zhongbai233.yuushya_editor.core.preview.CollisionShape;
 import java.util.List;

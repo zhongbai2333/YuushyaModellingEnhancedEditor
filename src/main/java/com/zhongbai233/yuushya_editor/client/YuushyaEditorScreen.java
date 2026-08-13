@@ -8,7 +8,7 @@ import com.zhongbai233.yuushya_editor.compat.YuushyaTransformConversion;
 import com.zhongbai233.yuushya_editor.client.renderer.BlockPreviewLayer;
 import com.zhongbai233.yuushya_editor.client.renderer.BlockPreviewGizmo;
 import com.zhongbai233.yuushya_editor.client.renderer.BlockPreviewPipRenderState;
-import com.zhongbai233.yuushya_editor.client.renderer.PreviewLineWidthPolicy;
+import com.zhongbai233.scene_editor.core.render.LineWidthPolicy;
 import com.zhongbai233.yuushya_editor.client.environment.EnvironmentPreviewFrame;
 import com.zhongbai233.yuushya_editor.client.environment.EnvironmentPreviewManager;
 import com.zhongbai233.yuushya_editor.client.environment.EnvironmentModeledBlock;
@@ -17,36 +17,36 @@ import com.zhongbai233.yuushya_editor.client.widget.BlackGoldToolButton;
 import com.zhongbai233.yuushya_editor.client.widget.BlackGoldUi;
 import com.zhongbai233.yuushya_editor.core.EditorTransform;
 import com.zhongbai233.yuushya_editor.core.ItemModelData;
-import com.zhongbai233.yuushya_editor.core.LayerSelection;
+import com.zhongbai233.scene_editor.core.selection.MultiSelectionPolicy;
 import com.zhongbai233.yuushya_editor.core.SceneDocument;
 import com.zhongbai233.yuushya_editor.core.SceneLayer;
 import com.zhongbai233.yuushya_editor.core.SceneLayerClipboard;
 import com.zhongbai233.yuushya_editor.core.TextModelData;
-import com.zhongbai233.yuushya_editor.core.camera.CameraController;
-import com.zhongbai233.yuushya_editor.core.camera.CameraFrame;
-import com.zhongbai233.yuushya_editor.core.camera.CameraMatrices;
-import com.zhongbai233.yuushya_editor.core.camera.CameraMode;
-import com.zhongbai233.yuushya_editor.core.camera.CameraState;
-import com.zhongbai233.yuushya_editor.core.camera.CursorWrapPolicy;
-import com.zhongbai233.yuushya_editor.core.camera.StandardCameraView;
-import com.zhongbai233.yuushya_editor.core.command.CommandStack;
-import com.zhongbai233.yuushya_editor.core.command.DragTransaction;
-import com.zhongbai233.yuushya_editor.core.command.EditorCommand;
-import com.zhongbai233.yuushya_editor.core.command.EditorSessionPool;
-import com.zhongbai233.yuushya_editor.core.gizmo.GizmoDragMath;
-import com.zhongbai233.yuushya_editor.core.gizmo.GizmoHandle;
-import com.zhongbai233.yuushya_editor.core.gizmo.GizmoHitTesting;
-import com.zhongbai233.yuushya_editor.core.gizmo.GizmoMode;
-import com.zhongbai233.yuushya_editor.core.gizmo.GizmoSizingPolicy;
-import com.zhongbai233.yuushya_editor.core.gizmo.GizmoSnapPolicy;
+import com.zhongbai233.scene_editor.core.camera.EditorCameraController;
+import com.zhongbai233.scene_editor.core.camera.CameraFrame;
+import com.zhongbai233.scene_editor.core.camera.CameraMatrices;
+import com.zhongbai233.scene_editor.core.camera.EditorCameraMode;
+import com.zhongbai233.scene_editor.core.camera.EditorCameraState;
+import com.zhongbai233.scene_editor.core.camera.CursorWrapPolicy;
+import com.zhongbai233.scene_editor.core.camera.StandardCameraView;
+import com.zhongbai233.scene_editor.core.command.CommandStack;
+import com.zhongbai233.scene_editor.core.transaction.DragTransaction;
+import com.zhongbai233.scene_editor.core.command.EditorCommand;
+import com.zhongbai233.scene_editor.core.session.EditorSessionPool;
+import com.zhongbai233.scene_editor.core.gizmo.GizmoDragMath;
+import com.zhongbai233.scene_editor.core.gizmo.GizmoHandle;
+import com.zhongbai233.scene_editor.core.gizmo.GizmoHitTesting;
+import com.zhongbai233.scene_editor.core.gizmo.GizmoMode;
+import com.zhongbai233.scene_editor.core.gizmo.GizmoSizingPolicy;
+import com.zhongbai233.scene_editor.core.gizmo.GizmoSnapPolicy;
 import com.zhongbai233.yuushya_editor.core.geometry.SelectionTransforms;
 import com.zhongbai233.yuushya_editor.core.geometry.ZFightDetector;
 import com.zhongbai233.yuushya_editor.core.geometry.ZFightOptimizer;
 import com.zhongbai233.yuushya_editor.core.geometry.ZFightSaveCoordinator;
-import com.zhongbai233.yuushya_editor.core.projection.PickingRay;
-import com.zhongbai233.yuushya_editor.core.projection.ProjectedPoint;
-import com.zhongbai233.yuushya_editor.core.projection.Projection;
-import com.zhongbai233.yuushya_editor.core.projection.Viewport;
+import com.zhongbai233.scene_editor.core.projection.PickingRay;
+import com.zhongbai233.scene_editor.core.projection.ProjectedPoint;
+import com.zhongbai233.scene_editor.core.projection.EditorProjection;
+import com.zhongbai233.scene_editor.core.projection.EditorViewport;
 import com.zhongbai233.yuushya_editor.core.preview.BlockPreviewTransform;
 import com.zhongbai233.yuushya_editor.core.preview.BlockPreviewPicking;
 import com.zhongbai233.yuushya_editor.core.preview.CollisionShape;
@@ -107,7 +107,7 @@ public final class YuushyaEditorScreen extends Screen {
     private final CommandStack<SceneDocument<Object>> history;
     private final Optional<EditorHistorySessions.Key> historySessionKey;
     private final SceneLayerClipboard<Object> layerClipboard = new SceneLayerClipboard<>();
-    private final CameraController cameraController = new CameraController();
+    private final EditorCameraController cameraController = new EditorCameraController();
     private final EnvironmentPreviewManager environmentPreview = new EnvironmentPreviewManager();
     private final EditBox[] transformBoxes = new EditBox[9];
     private final String[] syncedTransformValues = new String[9];
@@ -115,13 +115,13 @@ public final class YuushyaEditorScreen extends Screen {
     /** The document selection remains the primary inspector layer; this set is the full UI selection. */
     private final LinkedHashSet<UUID> selectedLayerIds = new LinkedHashSet<>();
     private EnvironmentPreviewFrame environmentFrame = EnvironmentPreviewFrame.empty();
-    private CameraState cachedFrameCamera;
-    private Viewport cachedFrameViewport;
+    private EditorCameraState cachedFrameCamera;
+    private EditorViewport cachedFrameViewport;
     private CameraFrame cachedCameraFrame;
     private SceneDocument<Object> cachedPreviewDraft;
     private EnvironmentPreviewFrame cachedPreviewEnvironmentFrame;
     private List<BlockPreviewLayer> cachedPreviewLayers = List.of();
-    private CameraState camera;
+    private EditorCameraState camera;
     private BlackGoldButton visibilityButton;
     private BlackGoldButton collisionShapeButton;
     private BlackGoldButton contentButton;
@@ -214,13 +214,9 @@ public final class YuushyaEditorScreen extends Screen {
         int collisionButtonWidth = compactLayout() ? 28 : inspectorFullWidth;
         collisionShapeButton = addRenderableWidget(new BlackGoldButton(collisionButtonX, collisionButtonY,
                 collisionButtonWidth, 20, Component.empty(), button -> cycleCollisionShape(), GOLD_DIM));
-        if (host.editorType() != com.zhongbai233.yuushya_editor.core.EditorType.BLOCK) {
-            contentButton = addRenderableWidget(new BlackGoldButton(collisionButtonX, collisionButtonY + 24,
-                    collisionButtonWidth, 20, Component.empty(), button -> editSelectedContent(),
-                    BlackGoldUi.CYAN));
-        } else {
-            contentButton = null;
-        }
+        contentButton = addRenderableWidget(new BlackGoldButton(collisionButtonX, collisionButtonY + 24,
+                collisionButtonWidth, 20, Component.empty(), button -> editSelectedContent(),
+                BlackGoldUi.CYAN));
 
         int visibleRows = visibleLayerRows();
         int end = Math.min(draft.layers().size(), layerScroll + visibleRows);
@@ -408,7 +404,7 @@ public final class YuushyaEditorScreen extends Screen {
         String titleText = BlackGoldUi.ellipsize(font, editorTitle.getString(), Math.max(0, previewWidth - 20));
         graphics.text(font, Component.literal(titleText), previewX + 10, 8, TEXT_SECONDARY, false);
 
-        Viewport viewport = editorViewport();
+        EditorViewport viewport = editorViewport();
         CameraFrame frame = currentCameraFrame();
         SceneLayer<Object> selected = draft.selectedLayer().orElse(null);
         submitBlockPreview(graphics, viewport, frame, selected);
@@ -422,7 +418,7 @@ public final class YuushyaEditorScreen extends Screen {
      * The world-space gold box remains the precise outline; these short screen-space corners are
      * only an occlusion-independent marker.
      */
-    private void drawSelectedScreenMarker(GuiGraphicsExtractor graphics, Viewport viewport,
+    private void drawSelectedScreenMarker(GuiGraphicsExtractor graphics, EditorViewport viewport,
             CameraFrame frame, SceneLayer<Object> selected) {
         if (selected == null || !selected.visible() || !(selected.hostData() instanceof BlockState)) return;
         Matrix4f transform = BlockPreviewTransform.matrix(selected.transform());
@@ -435,9 +431,9 @@ public final class YuushyaEditorScreen extends Screen {
             for (int y = 0; y <= 1; y++) {
                 for (int z = 0; z <= 1; z++) {
                     Vector3f world = transform.transformPosition(new Vector3f(x, y, z));
-                    ProjectedPoint point = Projection.project(new Vector3d(world),
+                    ProjectedPoint point = EditorProjection.project(new Vector3d(world),
                             frame.matrices(), frame.viewport());
-                    if (point.behind() || !Double.isFinite(point.screenX())
+                    if (point.behindCamera() || !Double.isFinite(point.screenX())
                             || !Double.isFinite(point.screenY())) continue;
                     minX = Math.min(minX, point.screenX());
                     minY = Math.min(minY, point.screenY());
@@ -482,7 +478,7 @@ public final class YuushyaEditorScreen extends Screen {
                 hudX, height - 34, TEXT_SECONDARY, false);
 
         SceneLayer<Object> selected = draft.selectedLayer().orElse(null);
-        String projection = Component.translatable(camera.mode() == CameraMode.ORTHOGRAPHIC
+        String projection = Component.translatable(camera.mode() == EditorCameraMode.ORTHOGRAPHIC
                 ? "screen.yuushya_modelling_enhanced_editor.projection.orthographic"
                 : "screen.yuushya_modelling_enhanced_editor.projection.perspective").getString();
         String selection;
@@ -500,7 +496,7 @@ public final class YuushyaEditorScreen extends Screen {
                             selected.name(), visibility).getString();
         }
         String lineWidth = Component.translatable("screen.yuushya_modelling_enhanced_editor.line_width",
-                String.format(Locale.ROOT, "%.2f", PreviewLineWidthPolicy.forCamera(camera))).getString();
+                String.format(Locale.ROOT, "%.2f", LineWidthPolicy.forCamera(camera))).getString();
         String environment = environmentFrame.complete()
                 ? Component.translatable("screen.yuushya_modelling_enhanced_editor.environment_count",
                         environmentFrame.retainedBlocks()).getString()
@@ -529,7 +525,7 @@ public final class YuushyaEditorScreen extends Screen {
         drawDisc(graphics, centerX, centerY, panelRadius, 0xA03A4658);
         drawDisc(graphics, centerX, centerY, panelRadius - 1, 0xD00B0E14);
 
-        Matrix4f view = CameraMatrices.create(camera, new Viewport(0, 0, 1, 1)).view();
+        Matrix4f view = CameraMatrices.create(camera, new EditorViewport(0, 0, 1, 1)).view();
         List<OrientationAxis> axes = new ArrayList<>(6);
         addOrientationAxis(axes, view, new Vector3f(1.0F, 0.0F, 0.0F), "X", 0xFFD34242);
         addOrientationAxis(axes, view, new Vector3f(-1.0F, 0.0F, 0.0F), "", 0xFFD34242);
@@ -571,7 +567,7 @@ public final class YuushyaEditorScreen extends Screen {
                 | (((color >>> 8) & 0xFF) / 2 << 8) | ((color & 0xFF) / 2);
     }
 
-    private void submitBlockPreview(GuiGraphicsExtractor graphics, Viewport viewport, CameraFrame frame,
+    private void submitBlockPreview(GuiGraphicsExtractor graphics, EditorViewport viewport, CameraFrame frame,
             SceneLayer<Object> selected) {
         List<BlockPreviewLayer> layers = previewLayers();
         boolean anySelectedVisible = false;
@@ -588,7 +584,7 @@ public final class YuushyaEditorScreen extends Screen {
                 : new BlockPreviewGizmo(pivot, gizmoMode, activeGizmoHandle,
                         gizmoSizes.axisLength(), gizmoSizes.rotationRadius(), gizmoSizes.scaleHandleLength());
         graphics.submitPictureInPictureRenderState(new BlockPreviewPipRenderState(environmentFrame,
-                layers, frame, gizmo, draft.collisionShape(), PreviewLineWidthPolicy.forCamera(camera), true,
+                layers, frame, gizmo, draft.collisionShape(), LineWidthPolicy.forCamera(camera), true,
                 viewport.x(), viewport.y(), viewport.x() + viewport.width(), viewport.y() + viewport.height(),
                 graphics.peekScissorStack()));
     }
@@ -645,7 +641,7 @@ public final class YuushyaEditorScreen extends Screen {
         double radius = 0.0D;
         for (SceneLayer<Object> layer : selectedLayers()) {
             radius = Math.max(radius, layerPivot(layer).distance(pivot)
-                    + GizmoSizingPolicy.worldBoundingRadius(layer.transform()));
+                    + GizmoSizingPolicy.worldBoundingRadius(layer.transform().scale()));
         }
         return GizmoSizingPolicy.calculate(radius);
     }
@@ -891,11 +887,11 @@ public final class YuushyaEditorScreen extends Screen {
                 return true;
             }
             if (event.key() == GLFW.GLFW_KEY_O) {
-                camera = cameraController.switchProjection(camera, CameraMode.ORTHOGRAPHIC);
+                camera = cameraController.switchProjection(camera, EditorCameraMode.ORTHOGRAPHIC);
                 return true;
             }
             if (event.key() == GLFW.GLFW_KEY_P) {
-                camera = cameraController.switchProjection(camera, CameraMode.PERSPECTIVE);
+                camera = cameraController.switchProjection(camera, EditorCameraMode.ORBIT);
                 return true;
             }
         }
@@ -944,11 +940,11 @@ public final class YuushyaEditorScreen extends Screen {
     private void applySelectionClick(UUID id, boolean shiftDown, boolean controlDown) {
         List<UUID> orderedIds = new ArrayList<>(draft.layers().size());
         for (SceneLayer<Object> layer : draft.layers()) orderedIds.add(layer.id());
-        LayerSelection.Result selection = LayerSelection.click(orderedIds, selectedLayerIds,
+        MultiSelectionPolicy.Result selection = MultiSelectionPolicy.click(orderedIds, selectedLayerIds,
                 draft.selectedLayerId(), id, shiftDown, controlDown);
         selectedLayerIds.clear();
-        selectedLayerIds.addAll(selection.selectedLayerIds());
-        draft = draft.select(selection.primaryLayerId());
+        selectedLayerIds.addAll(selection.selectedElementIds());
+        draft = draft.select(selection.primaryElementId());
         cachedPreviewDraft = null;
     }
 
@@ -1063,7 +1059,10 @@ public final class YuushyaEditorScreen extends Screen {
         if (!commitInspector("numeric transform")) return;
         SceneLayer<Object> selected = draft.selectedLayer().orElse(null);
         if (selected == null) return;
-        if (selected.hostData() instanceof ItemModelData itemData) {
+        if (selected.hostData() instanceof BlockState blockState) {
+            minecraft.setScreen(new BlockStateEditorScreen(this, blockState,
+                    value -> replaceSelectedContent(value, "edit block state")));
+        } else if (selected.hostData() instanceof ItemModelData itemData) {
             minecraft.setScreen(new ItemContentEditorScreen(this, itemData,
                     value -> replaceSelectedContent(value, "edit item")));
         } else if (selected.hostData() instanceof TextModelData textData) {
@@ -1076,7 +1075,10 @@ public final class YuushyaEditorScreen extends Screen {
         SceneLayer<Object> selected = draft.selectedLayer().orElse(null);
         if (selected == null || selected.hostData().equals(hostData)) return;
         String name = selected.name();
-        if (hostData instanceof ItemModelData itemData) {
+        if (hostData instanceof BlockState blockState) {
+            name = (layerIndex(selected.id()) + 1) + "  "
+                    + BuiltInRegistries.BLOCK.getKey(blockState.getBlock());
+        } else if (hostData instanceof ItemModelData itemData) {
             name = (layerIndex(selected.id()) + 1) + "  " + itemData.itemStack().getHoverName().getString();
         }
         SceneLayer<Object> replacement = new SceneLayer<>(selected.id(), name, hostData,
@@ -1186,9 +1188,9 @@ public final class YuushyaEditorScreen extends Screen {
     }
 
     private void selectLayerAt(double mouseX, double mouseY, boolean shiftDown, boolean controlDown) {
-        Viewport viewport = editorViewport();
+        EditorViewport viewport = editorViewport();
         CameraMatrices matrices = CameraMatrices.create(camera, viewport);
-        PickingRay ray = Projection.rayFromScreen(mouseX, mouseY, matrices, viewport);
+        PickingRay ray = EditorProjection.rayFromScreen(mouseX, mouseY, matrices, viewport);
         SceneLayer<Object> best = null;
         double bestDistance = Double.POSITIVE_INFINITY;
         for (SceneLayer<Object> layer : draft.layers()) {
@@ -1557,11 +1559,16 @@ public final class YuushyaEditorScreen extends Screen {
                     Component.translatable(draft.collisionShape().kind().translationKey())));
         }
         if (contentButton != null) {
-            contentButton.active = active;
-            contentButton.setMessage(Component.translatable(host.editorType()
-                    == com.zhongbai233.yuushya_editor.core.EditorType.ITEM
-                    ? "screen.yuushya_modelling_enhanced_editor.replace_item"
-                    : "screen.yuushya_modelling_enhanced_editor.edit_text"));
+            contentButton.active = active && selected != null
+                    && (selected.hostData() instanceof BlockState
+                            || selected.hostData() instanceof ItemModelData
+                            || selected.hostData() instanceof TextModelData);
+            String key = selected != null && selected.hostData() instanceof BlockState
+                    ? "screen.yuushya_modelling_enhanced_editor.edit_block_state"
+                    : host.editorType() == com.zhongbai233.yuushya_editor.core.EditorType.ITEM
+                            ? "screen.yuushya_modelling_enhanced_editor.replace_item"
+                            : "screen.yuushya_modelling_enhanced_editor.edit_text";
+            contentButton.setMessage(Component.translatable(key));
         }
         if (selected == null) {
             if (visibilityButton != null) visibilityButton.active = false;
@@ -1594,13 +1601,13 @@ public final class YuushyaEditorScreen extends Screen {
         if (selected == null) return;
         Vector3d pivot = selectionPivot();
         double radius = selectedLayers().stream().mapToDouble(layer -> layerPivot(layer).distance(pivot)
-                + GizmoSizingPolicy.worldBoundingRadius(layer.transform())).max().orElse(1.0D);
+                + GizmoSizingPolicy.worldBoundingRadius(layer.transform().scale())).max().orElse(1.0D);
         camera = cameraController.focus(camera, pivot, Math.max(1.0D, radius * 2.0D),
                 editorViewport(), WORLD_UP);
     }
 
-    private Viewport editorViewport() {
-        return new Viewport(previewX() + 1, 26,
+    private EditorViewport editorViewport() {
+        return new EditorViewport(previewX() + 1, 26,
                 Math.max(32, previewWidth() - 2), Math.max(32, height - 54));
     }
 
@@ -1613,7 +1620,7 @@ public final class YuushyaEditorScreen extends Screen {
     }
 
     private CameraFrame currentCameraFrame() {
-        Viewport viewport = editorViewport();
+        EditorViewport viewport = editorViewport();
         if (cachedCameraFrame == null || cachedFrameCamera != camera || !viewport.equals(cachedFrameViewport)) {
             cachedFrameCamera = camera;
             cachedFrameViewport = viewport;
@@ -1626,7 +1633,7 @@ public final class YuushyaEditorScreen extends Screen {
         SceneLayer<Object> selected = draft.selectedLayer().orElse(null);
         if (selected == null || handle == GizmoHandle.NONE) return false;
         Vector3d origin = selectionPivot();
-        PickingRay ray = Projection.rayFromScreen(mouseX, mouseY, frame.matrices(), frame.viewport());
+        PickingRay ray = EditorProjection.rayFromScreen(mouseX, mouseY, frame.matrices(), frame.viewport());
         Vector3d axis = handle.axis();
         Vector3d startHit;
         double centerScreenX = 0.0D;
@@ -1649,8 +1656,8 @@ public final class YuushyaEditorScreen extends Screen {
                 setStatus(Component.translatable("screen.yuushya_modelling_enhanced_editor.error.scale_positive"), true);
                 return false;
             }
-            ProjectedPoint projected = Projection.project(origin, frame.matrices(), frame.viewport());
-            ProjectedPoint projectedAxis = Projection.project(new Vector3d(origin).add(axis),
+            ProjectedPoint projected = EditorProjection.project(origin, frame.matrices(), frame.viewport());
+            ProjectedPoint projectedAxis = EditorProjection.project(new Vector3d(origin).add(axis),
                     frame.matrices(), frame.viewport());
             if (!projected.visible() || !projectedAxis.visible()) return false;
             centerScreenX = projected.screenX();
@@ -1698,7 +1705,7 @@ public final class YuushyaEditorScreen extends Screen {
             changedDocument = SelectionTransforms.scale(transaction.before(), session.selectedLayerIds(),
                     session.origin(), factors);
         } else {
-            PickingRay ray = Projection.rayFromScreen(mouseX, mouseY, session.frame().matrices(),
+            PickingRay ray = EditorProjection.rayFromScreen(mouseX, mouseY, session.frame().matrices(),
                     session.frame().viewport());
             Vector3d currentHit = GizmoDragMath.intersectConstraint(ray, session.origin(), session.axis(),
                     session.mode() == GizmoMode.MOVE
@@ -1768,7 +1775,7 @@ public final class YuushyaEditorScreen extends Screen {
     }
 
     private boolean insideViewport(double x, double y) {
-        Viewport viewport = editorViewport();
+        EditorViewport viewport = editorViewport();
         return x >= viewport.x() && x < viewport.x() + viewport.width()
                 && y >= viewport.y() && y < viewport.y() + viewport.height();
     }
@@ -1799,7 +1806,7 @@ public final class YuushyaEditorScreen extends Screen {
         return SelectionTransforms.pivot(draft, selectedLayerIds);
     }
 
-    private static CameraState initialCamera(List<SceneLayer<Object>> layers, BlockPos worldOrigin) {
+    private static EditorCameraState initialCamera(List<SceneLayer<Object>> layers, BlockPos worldOrigin) {
         if (worldOrigin != null) {
             net.minecraft.client.Camera worldCamera = Minecraft.getInstance().gameRenderer.getMainCamera();
             if (worldCamera.isInitialized()) {
@@ -1811,7 +1818,7 @@ public final class YuushyaEditorScreen extends Screen {
                     float fov = Math.clamp(worldCamera.getFov(), 2.0F, 178.0F);
                     Vector3d focus = new Vector3d(relative).add(new Vector3d(worldCamera.forwardVector())
                             .mul(relative.length()));
-                    return new CameraState(CameraMode.PERSPECTIVE, relative,
+                    return new EditorCameraState(EditorCameraMode.ORBIT, relative,
                             worldCamera.rotation(), focus, fov, 5.0F, 0.05F, 2048.0F);
                 }
             }
@@ -1821,7 +1828,7 @@ public final class YuushyaEditorScreen extends Screen {
             for (SceneLayer<Object> layer : layers) focus.add(layerPivot(layer));
             focus.div(layers.size());
         }
-        return CameraState.lookingAt(CameraMode.PERSPECTIVE,
+        return EditorCameraState.lookingAt(EditorCameraMode.ORBIT,
                 new Vector3d(focus).add(7.0D, 5.5D, 9.0D), focus, WORLD_UP,
                 45.0F, 5.0F, 0.05F, 2048.0F);
     }

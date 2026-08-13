@@ -1,7 +1,7 @@
 package com.zhongbai233.yuushya_editor.client.renderer;
 
-import com.zhongbai233.yuushya_editor.core.gizmo.GizmoHandle;
-import com.zhongbai233.yuushya_editor.core.gizmo.GizmoMode;
+import com.zhongbai233.scene_editor.core.gizmo.GizmoHandle;
+import com.zhongbai233.scene_editor.core.gizmo.GizmoMode;
 import java.util.Objects;
 import org.joml.Vector3d;
 import org.joml.Vector3dc;

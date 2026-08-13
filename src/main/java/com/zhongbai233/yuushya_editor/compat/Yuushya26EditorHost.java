@@ -36,8 +36,6 @@ public final class Yuushya26EditorHost implements YuushyaEditorHost<Object> {
     private final ShowBlockEntity blockEntity;
     private final BlockPos blockPos;
     private final Map<UUID, TransformBlockData> rawLayers = new LinkedHashMap<>();
-    private final Map<UUID, Object> expectedHostData = new HashMap<>();
-    private List<UUID> expectedLayerIds = List.of();
 
     private Yuushya26EditorHost(ShowBlockEntity blockEntity) {
         this.blockEntity = Objects.requireNonNull(blockEntity, "blockEntity");
@@ -58,7 +56,6 @@ public final class Yuushya26EditorHost implements YuushyaEditorHost<Object> {
         String documentKey = blockPos.toShortString();
         List<SceneLayer<Object>> layers = new ArrayList<>(source.size());
         rawLayers.clear();
-        expectedHostData.clear();
         for (int slot = 0; slot < source.size(); slot++) {
             TransformBlockData raw = Objects.requireNonNull(source.get(slot), "transform data entry");
             UUID id = UUID.nameUUIDFromBytes((documentKey + ':' + slot).getBytes(StandardCharsets.UTF_8));
@@ -68,9 +65,7 @@ public final class Yuushya26EditorHost implements YuushyaEditorHost<Object> {
             BlockState blockState = Objects.requireNonNull(raw.blockState, "block state");
             layers.add(new SceneLayer<>(id, layerName(slot, blockState), blockState, transform, raw.isShown));
             rawLayers.put(id, raw);
-            expectedHostData.put(id, blockState);
         }
-        expectedLayerIds = layerIds(layers);
         UUID selected = selectedSlot >= 0 && selectedSlot < layers.size() ? layers.get(selectedSlot).id() : null;
         return new SceneDocument<>(layers, selected, collisionShape);
     }
@@ -84,31 +79,21 @@ public final class Yuushya26EditorHost implements YuushyaEditorHost<Object> {
         }
         List<TransformBlockData> raw = new ArrayList<>(rawLayers.values());
         rawLayers.clear();
-        expectedHostData.clear();
         for (int slot = 0; slot < cachedDocument.layers().size(); slot++) {
             SceneLayer<Object> layer = cachedDocument.layers().get(slot);
             rawLayers.put(layer.id(), raw.get(slot));
-            expectedHostData.put(layer.id(), layer.hostData());
         }
-        expectedLayerIds = layerIds(cachedDocument.layers());
         return true;
     }
 
     @Override
     public ValidationResult validate(SceneDocument<Object> draft) {
         Objects.requireNonNull(draft, "draft");
-        Map<UUID, Integer> originalSlots = new HashMap<>();
-        for (int slot = 0; slot < expectedLayerIds.size(); slot++) originalSlots.put(expectedLayerIds.get(slot), slot);
         for (int slot = 0; slot < draft.layers().size(); slot++) {
             SceneLayer<Object> layer = draft.layers().get(slot);
             if (!(layer.hostData() instanceof BlockState)) {
                 return ValidationResult.rejected(
                         "screen.yuushya_modelling_enhanced_editor.validation.layer_block", slot + 1);
-            }
-            Integer originalSlot = originalSlots.get(layer.id());
-            if (originalSlot != null && !Objects.equals(expectedHostData.get(layer.id()), layer.hostData())) {
-                return ValidationResult.rejected(
-                        "screen.yuushya_modelling_enhanced_editor.validation.replace");
             }
         }
         return ValidationResult.ok();
@@ -190,9 +175,6 @@ public final class Yuushya26EditorHost implements YuushyaEditorHost<Object> {
             send(Math.max(0, blockEntity.getSlot()), TransformType.SHAPE, draft.collisionShape().kind().ordinal());
         }
         if (!draft.layers().isEmpty()) blockEntity.setSlot(selectedSlot(draft));
-        expectedLayerIds = layerIds(draft.layers());
-        expectedHostData.clear();
-        draft.layers().forEach(layer -> expectedHostData.put(layer.id(), layer.hostData()));
         TransformDataOncePacket.sendToServerSideSuccess(blockPos);
     }
 
@@ -201,12 +183,6 @@ public final class Yuushya26EditorHost implements YuushyaEditorHost<Object> {
             if (draft.layers().get(slot).id().equals(draft.selectedLayerId())) return slot;
         }
         return 0;
-    }
-
-    private static List<UUID> layerIds(List<SceneLayer<Object>> layers) {
-        List<UUID> ids = new ArrayList<>(layers.size());
-        for (SceneLayer<Object> layer : layers) ids.add(layer.id());
-        return List.copyOf(ids);
     }
 
     private static boolean requiresFullRewrite(SceneDocument<Object> original, SceneDocument<Object> draft) {
@@ -272,9 +248,14 @@ public final class Yuushya26EditorHost implements YuushyaEditorHost<Object> {
         if (Float.compare(oldScale.y, newScale.y) != 0) send(slot, TransformType.SCALE_Y, newScale.y);
         if (Float.compare(oldScale.z, newScale.z) != 0) send(slot, TransformType.SCALE_Z, newScale.z);
         if (before.visible() != after.visible()) send(slot, TransformType.SHOWN, after.visible() ? 1.0D : 0.0D);
+        BlockState newBlockState = (BlockState) after.hostData();
+        if (!before.hostData().equals(newBlockState)) {
+            send(slot, TransformType.BLOCK_STATE, Block.getId(newBlockState));
+        }
         raw.pos.set(newPosition);
         raw.rot.set(newEuler);
         raw.scales.set(newScale);
+        raw.blockState = newBlockState;
         raw.isShown = after.visible();
     }
 

@@ -69,10 +69,19 @@ eclipse {
 
 repositories {
     mavenCentral()
+    def localSceneEditorRepository = providers.gradleProperty('scene_editor_repository').orElse('').get().trim()
+    if (!localSceneEditorRepository.isEmpty()) {
+        maven {
+            name = 'localSceneEditorVerification'
+            url = uri(localSceneEditorRepository)
+            content { includeGroup 'com.github.zhongbai2333.SceneEditor' }
+        }
+    }
     maven {
         url = 'https://jitpack.io'
         content {
             includeGroup 'com.github.zhongbai2333.BenchMod'
+            includeGroup 'com.github.zhongbai2333.SceneEditor'
         }
     }
 }
@@ -117,6 +126,11 @@ def yuushyaRuntimeFile = yuushyaRuntimeJar.map { path ->
 dependencies {
     api 'org.joml:joml:1.10.8'
 
+    // The reusable editor interaction core is bundled so users do not need to install another mod.
+    def sceneEditorCore = implementation(
+            "com.github.zhongbai2333.SceneEditor:scene-editor-core:${scene_editor_version}")
+    jarJar(sceneEditorCore)
+
     // Yuushya is the required host mod: compile against its audited API while keeping it external at runtime.
     compileOnly files(yuushyaRuntimeFile)
     runtimeOnly files(yuushyaRuntimeFile)
@@ -128,6 +142,25 @@ dependencies {
     testImplementation platform('org.junit:junit-bom:5.13.4')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('jarJar') {
+    inputs.property('sceneEditorSupportedRange', scene_editor_version_range)
+    inputs.property('sceneEditorGroup', 'com.github.zhongbai2333.SceneEditor')
+    doLast {
+        File metadataFile = new File(outputs.files.singleFile, 'META-INF/jarjar/metadata.json')
+        def metadata = new groovy.json.JsonSlurper().parse(metadataFile)
+        def descriptors = metadata.jars.findAll { descriptor ->
+            descriptor.identifier.group == inputs.properties['sceneEditorGroup'].toString()
+                    && descriptor.identifier.artifact == 'scene-editor-core'
+        }
+        if (descriptors.size() != 1) {
+            throw new GradleException("Expected one Scene Editor Core JiJ descriptor, got ${descriptors}")
+        }
+        descriptors[0].version.range = inputs.properties['sceneEditorSupportedRange'].toString()
+        metadataFile.setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(metadata)) + '\n',
+                'UTF-8')
+    }
 }
 
 tasks.named('test') {
@@ -150,6 +183,7 @@ tasks.register('verifyIdeClasspath') {
             'src/main/java',
             'src/test/java',
             'build.nosync/moddev/artifacts/minecraft-patched-',
+            "scene-editor-core-${scene_editor_version}.jar",
             yuushyaRuntimeFile.get().canonicalPath.replace('\\\\', '/')
         ]
         if (modBenchEnabled) requiredFragments.add('src/bench/java')
@@ -260,6 +294,7 @@ if (modBenchEnabled) {
         expectedArtifactPaths.set([
             'artifacts/screenshots/yuushya-editor-axis-scale.png',
             'artifacts/screenshots/yuushya-editor-block-picker.png',
+            'artifacts/screenshots/yuushya-editor-block-state-settings.png',
             'artifacts/screenshots/yuushya-editor-added-glass-selected.png',
             'artifacts/screenshots/yuushya-editor-zfight-warning.png',
             'artifacts/screenshots/yuushya-editor-item-picker.png',
@@ -293,23 +328,80 @@ def verifyProductionJar = tasks.register('verifyProductionJar') {
     description = 'Rejects stale, benchmark, host-mod, or otherwise unsafe content in the production Jar.'
     dependsOn tasks.named('jar')
     inputs.file(productionJar)
+    inputs.property('sceneEditorVersion', scene_editor_version)
+    inputs.property('sceneEditorVersionRange', scene_editor_version_range)
     doLast {
         File archiveFile = productionJar.get().asFile
         List<String> rejected = []
         new java.util.zip.ZipFile(archiveFile).withCloseable { archive ->
+            List<String> requiredEditorEntries = [
+                'com/zhongbai233/yuushya_editor/client/BlockStateEditorScreen.class',
+                'com/zhongbai233/yuushya_editor/core/BlockStatePropertySupport.class'
+            ]
+            List<String> missingEditorEntries = requiredEditorEntries.findAll {
+                archive.getEntry(it) == null
+            }
+            if (!missingEditorEntries.isEmpty()) {
+                throw new GradleException("Production Jar is missing block-state editor entries: "
+                        + missingEditorEntries)
+            }
             archive.entries().each { entry ->
                 String name = entry.name
                 boolean staleClass = name ==~ /(?:^|.*\/)[^\/]*\s+\d+\.class/
                 boolean benchContent = name.startsWith('com/zhongbai233/yuushya_editor/bench/') ||
                         name.toLowerCase(java.util.Locale.ROOT).contains('modbench')
                 boolean shadedYuushya = name.startsWith('com/yuushya/')
+                boolean retiredLocalEditorCore = [
+                    'com/zhongbai233/yuushya_editor/client/renderer/PreviewLineWidthPolicy',
+                    'com/zhongbai233/yuushya_editor/core/camera/',
+                    'com/zhongbai233/yuushya_editor/core/command/',
+                    'com/zhongbai233/yuushya_editor/core/gizmo/',
+                    'com/zhongbai233/yuushya_editor/core/projection/',
+                    'com/zhongbai233/yuushya_editor/core/selection/'
+                ].any(name::startsWith) || name == 'com/zhongbai233/yuushya_editor/core/LayerSelection.class'
                 boolean reflectiveProductionClass = false
                 if (name.startsWith('com/zhongbai233/yuushya_editor/') && name.endsWith('.class')) {
                     byte[] classBytes = archive.getInputStream(entry).bytes
                     String constantPool = new String(classBytes, java.nio.charset.StandardCharsets.ISO_8859_1)
                     reflectiveProductionClass = constantPool.contains('java/lang/reflect/')
                 }
-                if (staleClass || benchContent || shadedYuushya || reflectiveProductionClass) rejected.add(name)
+                if (staleClass || benchContent || shadedYuushya || retiredLocalEditorCore
+                        || reflectiveProductionClass) rejected.add(name)
+            }
+
+            def metadataEntry = archive.getEntry('META-INF/jarjar/metadata.json')
+            if (metadataEntry == null) {
+                throw new GradleException('Production Jar is missing Scene Editor JiJ metadata')
+            }
+            def metadata = new groovy.json.JsonSlurper().parse(archive.getInputStream(metadataEntry))
+            def descriptors = metadata.jars.findAll { descriptor ->
+                descriptor.identifier.group == 'com.github.zhongbai2333.SceneEditor'
+                        && descriptor.identifier.artifact == 'scene-editor-core'
+            }
+            if (descriptors.size() != 1) {
+                throw new GradleException("Production Jar has invalid Scene Editor descriptors: ${descriptors}")
+            }
+            def descriptor = descriptors[0]
+            if (descriptor.version.artifactVersion != inputs.properties['sceneEditorVersion'].toString()
+                    || descriptor.version.range != inputs.properties['sceneEditorVersionRange'].toString()) {
+                throw new GradleException("Production Jar has incompatible Scene Editor version metadata: "
+                        + descriptor.version)
+            }
+            def nestedEntry = archive.getEntry(descriptor.path)
+            if (nestedEntry == null) {
+                throw new GradleException("Production Jar is missing nested ${descriptor.path}")
+            }
+            new java.util.zip.ZipInputStream(archive.getInputStream(nestedEntry)).withCloseable { nested ->
+                boolean hasInteractionApi = false
+                for (def entry = nested.nextEntry; entry != null; entry = nested.nextEntry) {
+                    if (entry.name == 'com/zhongbai233/scene_editor/core/selection/MultiSelectionPolicy.class') {
+                        hasInteractionApi = true
+                        break
+                    }
+                }
+                if (!hasInteractionApi) {
+                    throw new GradleException('Nested Scene Editor Core does not contain the beta.3 interaction API')
+                }
             }
         }
         if (!rejected.isEmpty()) {

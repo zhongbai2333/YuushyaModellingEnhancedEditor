@@ -14,23 +14,24 @@ closed: if its compatibility binding cannot be established, the original Yuushya
 | Project | Repository | Audited branch/revision | Role |
 | --- | --- | --- | --- |
 | NetMusicCanPlayBili | <https://github.com/zhongbai2333/NetMusicCanPlayBili> | `master`; editor core introduced by `be964ac` | Source of the reusable scene-editor interaction model |
+| SceneEditor | <https://github.com/zhongbai2333/SceneEditor> | Version and compatible range are declared in `gradle.properties` | JiJ camera, projection, selection, Gizmo, and history core |
 | Yuushya Modelling | <https://github.com/Crystal1921/Yuushya-Modelling> | `26.1` at `57f4d86407510f76191e35c280d8e1c8d347bf42` | Runtime host, entity-block data, original screens, and network protocol |
 | Yuushya Townscape | <https://gitee.com/yuushyatownscape/yuushya-townscape/> | `26.1` at `3478bb99b3a1b2bb7df7dd8a974364c12e49f410` | Separate content upstream and optional development content |
 
 The revisions above are audit anchors, not permanent dependency locks. Re-audit the named integration classes
 before changing the supported Yuushya version range.
 
-## NCPB provenance
+## SceneEditor and NCPB provenance
 
-The host-neutral transform, camera matrices, projection, picking, bounded command history, and drag transaction
-in this repository are adapted from NCPB's common editor core. They were deliberately copied into a separate
-package so that this project can evolve independently and avoid depending on NCPB's media, terrain, networking,
-or control-console document model.
+The host-neutral camera matrices, projection, picking, selection policies, Gizmo interaction, bounded command
+history, and drag transaction now live in the independent SceneEditor repository and are embedded through
+NeoForge JiJ. The published compatibility range begins with the first SceneEditor version containing the
+Yuushya-proven multi-selection, modifier snapping, cursor wrapping, large-model rotation sensitivity, and
+pole-clamped camera behavior.
 
-The extraction now includes the camera controller, mouse policy, selection policy, Gizmo constraints and drag
-math, black-gold widget primitives, three-column Screen structure, top-right tool strip, bottom camera HUD,
-orientation widget, and PIP preview pattern needed by the committed modelling targets. The Yuushya-specific
-Screen remains a focused adapter rather than a copy of NCPB's media-console document and networking code.
+The Yuushya-specific document, model-unit transform, collision shape, coplanar checks, rendering, black-gold
+widgets, networking, and save coordination remain local. The Screen is therefore a focused host adapter rather
+than a copy of NCPB's media-console document and networking code, while reusable fixes have one upstream source.
 
 Both NCPB and this project use the MIT license and currently share the same copyright holder. Keep this
 provenance section when moving or substantially adapting NCPB editor code.

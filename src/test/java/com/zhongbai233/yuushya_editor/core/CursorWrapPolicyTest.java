@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import com.zhongbai233.yuushya_editor.core.camera.CursorWrapPolicy;
+import com.zhongbai233.scene_editor.core.camera.CursorWrapPolicy;
 import java.util.OptionalDouble;
 import org.junit.jupiter.api.Test;
 

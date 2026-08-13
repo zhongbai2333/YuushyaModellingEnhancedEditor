@@ -7,6 +7,7 @@
 - Minecraft 26.1.2、NeoForge 26.1.2.76。
 - 仓库内审计过的 Yuushya Modelling 2.4.2 开发 Jar。
 - 通过 JitPack 固定解析的 BenchMod `0.1.2` Gradle 插件、API 和 Runtime。
+- 通过 JitPack 解析并由成品 JiJ 的 Scene Editor Core；用户不需要单独安装该库。
 
 初始化项目：
 
@@ -42,7 +43,7 @@
 | `build` | 编译、测试并打包 |
 | `releaseBuild` | clean 后禁用陈旧编译缓存并完成发布校验 |
 | `verifyYuushyaRuntime` | 校验宿主 Jar 版本、类集合和 SHA-256 |
-| `verifyProductionJar` | 拒绝 Bench、Yuushya 本体和冲突 class 混入成品 |
+| `verifyProductionJar` | 校验 Scene Editor JiJ 元数据与嵌套 API，并拒绝重复 Core、Bench、Yuushya 本体和冲突 class |
 | `verifyLanguageKeys` | 要求中英翻译 key 完全一致 |
 | `eclipseClasspath` | 生成 JDT/Buildship 可导入的 `.classpath` |
 | `verifyIdeClasspath` | 校验 IDE classpath 完整性和实际 Jar 内容 |
@@ -59,6 +60,15 @@
 
 ## 依赖边界
 
+通用相机、投影、选择策略、Gizmo 交互和历史会话来自 Scene Editor Core，使用
+`implementation` 编译并通过 `jarJar` 嵌入。`scene_editor_version_range` 是多个宿主模组共同加载时的协商范围；
+范围下限必须是包含本项目所用交互 API 的首个版本。开发 SceneEditor 未发布版本时，可用
+`-Pscene_editor_repository=/absolute/path/to/SceneEditor/build/verification-repository` 指向其验证仓库。
+
+本项目不得重新引入 `core/camera`、`core/command`、`core/gizmo`、`core/projection` 或
+`core/selection` 的本地副本；`verifyProductionJar` 会拒绝这类重复 class。Yuushya 专用文档、变换单位、
+碰撞形状、共面检查和保存协调继续保留在本项目。
+
 `libs/yuushya_modelling-26.1.2-2.4.2.jar` 声明为 `compileOnly`、`runtimeOnly` 和 `benchImplementation`，用于编译期 API 校验、开发运行和集成验收，但绝不能 shade 进生产 Jar。它的审计信息见 [libs/README.md](../libs/README.md)。测试其他兼容构建时必须同时覆盖路径和已核实的 SHA-256：
 
 ```shell
@@ -71,7 +81,7 @@
 
 ## 代码结构
 
-- `core/`：不依赖 Minecraft 的场景、相机、投影、Gizmo、历史和几何检测。
+- `core/`：Yuushya 专用的场景草稿、宿主数据、变换单位、剪贴板和几何检测；通用交互 Core 位于 SceneEditor。
 - `client/`：NeoForge Screen、选择器、环境捕获和渲染。
 - `compat/`：Yuushya 2.4.2 强类型 API 适配、数据转换、验证和数据包提交。
 - `mixin/`：原版 Screen 私有宿主状态的类型化 Accessor，以及客户端世界更新的局部环境失效通知。

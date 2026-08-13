@@ -1,15 +1,17 @@
 package com.zhongbai233.yuushya_editor.client.renderer;
 
+import com.zhongbai233.scene_editor.core.render.LineWidthPolicy;
+
 import com.mojang.blaze3d.ProjectionType;
 import com.mojang.blaze3d.platform.Lighting;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.blaze3d.vertex.VertexConsumer;
 import com.mojang.logging.LogUtils;
-import com.zhongbai233.yuushya_editor.core.gizmo.GizmoHandle;
-import com.zhongbai233.yuushya_editor.core.gizmo.GizmoHitTesting;
-import com.zhongbai233.yuushya_editor.core.projection.ProjectedPoint;
-import com.zhongbai233.yuushya_editor.core.projection.Projection;
+import com.zhongbai233.scene_editor.core.gizmo.GizmoHandle;
+import com.zhongbai233.scene_editor.core.gizmo.GizmoHitTesting;
+import com.zhongbai233.scene_editor.core.projection.ProjectedPoint;
+import com.zhongbai233.scene_editor.core.projection.EditorProjection;
 import com.zhongbai233.yuushya_editor.core.preview.BlockPreviewTransform;
 import com.zhongbai233.yuushya_editor.core.preview.CollisionShape;
 import java.util.HashMap;
@@ -88,7 +90,7 @@ public final class BlockPreviewPipRenderer extends PictureInPictureRenderer<Bloc
         ACTIVE_LINE_WIDTH_SCALE.set(state.lineWidthScale());
         RenderSystem.backupProjectionMatrix();
         ProjectionType projectionType = state.cameraFrame().mode()
-                == com.zhongbai233.yuushya_editor.core.camera.CameraMode.ORTHOGRAPHIC
+                == com.zhongbai233.scene_editor.core.camera.EditorCameraMode.ORTHOGRAPHIC
                 ? ProjectionType.ORTHOGRAPHIC : ProjectionType.PERSPECTIVE;
         RenderSystem.setProjectionMatrix(projectionBuffer.getBuffer(
                 state.cameraFrame().matrices().projection()), projectionType);
@@ -439,7 +441,7 @@ public final class BlockPreviewPipRenderer extends PictureInPictureRenderer<Bloc
             BlockPreviewPipRenderState state, BlockPreviewGizmo gizmo, Vector3d localEndpoint,
             boolean selected, int color, float width) {
         Vector3d endpoint = new Vector3d(gizmo.origin()).add(localEndpoint);
-        ProjectedPoint projected = Projection.project(endpoint, state.cameraFrame().matrices(),
+        ProjectedPoint projected = EditorProjection.project(endpoint, state.cameraFrame().matrices(),
                 state.cameraFrame().viewport());
         if (!projected.visible()) return;
         double radius = selected ? 4.5D : 3.5D;
@@ -455,7 +457,7 @@ public final class BlockPreviewPipRenderer extends PictureInPictureRenderer<Bloc
 
     private static Vector3d markerPoint(ProjectedPoint center, double offsetX, double offsetY,
             BlockPreviewPipRenderState state) {
-        return Projection.worldPointAtScreenDepth(center.screenX() + offsetX, center.screenY() + offsetY,
+        return EditorProjection.worldPointAtScreenDepth(center.screenX() + offsetX, center.screenY() + offsetY,
                 center.depth(), state.cameraFrame().matrices(), state.cameraFrame().viewport());
     }
 
@@ -485,7 +487,7 @@ public final class BlockPreviewPipRenderer extends PictureInPictureRenderer<Bloc
             float x2, float y2, float z2, int color, float width) {
         // Keep camera-distance compensation while preventing the thinnest tier from
         // collapsing into a Retina hairline.
-        float visibleWidth = PreviewLineWidthPolicy.visibleWidth(width, ACTIVE_LINE_WIDTH_SCALE.get());
+        float visibleWidth = LineWidthPolicy.visibleWidth(width, ACTIVE_LINE_WIDTH_SCALE.get());
         buffer.addVertex(pose, x1, y1, z1).setColor(color).setNormal(0.0F, 1.0F, 0.0F)
                 .setLineWidth(visibleWidth);
         buffer.addVertex(pose, x2, y2, z2).setColor(color).setNormal(0.0F, 1.0F, 0.0F)

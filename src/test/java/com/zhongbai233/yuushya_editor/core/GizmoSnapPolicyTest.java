@@ -2,8 +2,8 @@ package com.zhongbai233.yuushya_editor.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import com.zhongbai233.yuushya_editor.core.gizmo.GizmoMode;
-import com.zhongbai233.yuushya_editor.core.gizmo.GizmoSnapPolicy;
+import com.zhongbai233.scene_editor.core.gizmo.GizmoMode;
+import com.zhongbai233.scene_editor.core.gizmo.GizmoSnapPolicy;
 import org.junit.jupiter.api.Test;
 
 class GizmoSnapPolicyTest {
