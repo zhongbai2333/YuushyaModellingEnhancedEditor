@@ -1,6 +1,6 @@
 # 贡献指南
 
-感谢参与 Yuushya Modelling Enhanced Editor。项目当前处于 alpha，优先接受可复现的兼容、数据安全、交互和渲染性能改进。
+感谢参与 Yuushya Modelling Enhanced Editor。项目当前处于 beta 测试阶段，优先处理可复现的兼容性、数据安全、交互一致性和渲染性能问题。
 
 ## 开始之前
 
@@ -30,10 +30,10 @@
 涉及 Minecraft 客户端行为时再执行：
 
 ```shell
-./gradlew verifyYuushyaEditorBench --no-daemon
+./gradlew verifyYuushyaEditorBench -PenableModBench=true --no-daemon
 ```
 
-Pull Request 请说明问题、用户可见变化、验证命令和兼容风险；视觉变化附截图，性能变化附同一环境下的前后指标。不要提交 `build/`、`build.nosync/`、`run/`、`.classpath`、自动生成 launch 配置或本机缓存。
+Pull Request 请说明问题、用户可见变化、验证命令和兼容风险；视觉变化附截图，性能变化附同一环境下的前后指标。不要提交 `build/`、`build.nosync/`、`run/`、`.classpath`、自动生成的 launch 配置或本机缓存。
 
 ## 报告问题
 

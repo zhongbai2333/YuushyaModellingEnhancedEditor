@@ -19,14 +19,12 @@
 
 仓库提交 `.vscode/settings.json` 和可移植的 `.vscode/tasks.json`，但忽略 NeoForge 自动生成且包含本机绝对路径的 `.vscode/launch.json`。
 
-本项目的 ModBench Gradle 插件要求 Java 25，并从 JitPack `0.1.2` 解析。当前 Java 扩展的 Gradle Build Server 可能在语言服务器切换运行时前用内置 Java 21 导入项目，导致插件解析失败；失败后 JDT 又可能保留旧 `build/moddev` 路径，而项目输出实际位于 `build.nosync/moddev`。工作区配置因此：
+本项目采用与 NCPB 相同的两层 Gradle 兼容方案：
 
-- 用 `java.jdt.ls.java.home` 从 Java 25 启动语言服务器；
-- 用 `java.import.gradle.java.home` 让 Gradle 导入使用 Java 25；
-- 关闭 `java.gradle.buildServer.enabled`，由 Buildship 导入 Gradle 模型；
-- 自动更新构建配置，并生成根目录 Eclipse metadata。
+- `gradle/gradle-daemon-jvm.properties` 固定 Daemon Java 25，并包含 Foojay 的跨平台下载地址；即使 VS Code Gradle Server 本身由内置 Java 21 启动，实际配置项目的 Daemon 仍会自动选择 Java 25；
+- ModBench 插件默认不加载，只有显式传入 `-PenableModBench=true` 的重型验收才从 JitPack 解析并应用插件。普通 IDE 初始化因此不依赖 Bench 插件 classpath。
 
-配置中的 Zulu 25 路径是当前 macOS 开发环境的安装路径。如果 JDK 安装在其他位置，请在 VS Code 用户设置中用本机路径覆盖 `java.jdt.ls.java.home`、`java.import.gradle.java.home` 和 JavaSE-25 runtime，不要提交个人路径变化。
+工作区不再提交任何本机 JDK 绝对路径；`.vscode/settings.json` 只关闭 Java Gradle Build Server、启用自动构建配置更新并生成根目录 Eclipse metadata。
 
 首次使用或曾看到 `Screen cannot be resolved` 时：
 
@@ -34,7 +32,7 @@
 2. 从命令面板执行 `Java: Clean Java Language Server Workspace`；
 3. 选择重启并重新载入窗口，等待 Gradle 导入完成。
 
-`verifyIdeClasspath` 会检查 Java 25、main/test/bench 源集、Yuushya Jar、当前 `build.nosync` Minecraft patched Jar 及其中的 `Screen.class`，并拒绝旧 `build/moddev` 路径。
+`verifyIdeClasspath` 默认检查 Java 25、main/test 源集、Yuushya Jar、当前 `build.nosync` Minecraft patched Jar 及其中的 `Screen.class`，并拒绝旧 `build/moddev` 路径。使用 `-PenableModBench=true` 同步时还会检查 bench 源集。
 
 ## 常用 Gradle 任务
 
@@ -49,7 +47,7 @@
 | `eclipseClasspath` | 生成 JDT/Buildship 可导入的 `.classpath` |
 | `verifyIdeClasspath` | 校验 IDE classpath 完整性和实际 Jar 内容 |
 | `runClient` | 启动包含 Yuushya 2.4.2 的开发客户端 |
-| `verifyYuushyaEditorBench` | 启动并验证真实集成客户端场景 |
+| `verifyYuushyaEditorBench` | 配合 `-PenableModBench=true` 启动并验证真实集成客户端场景 |
 
 发布构建建议始终运行：
 
@@ -61,7 +59,7 @@
 
 ## 依赖边界
 
-`libs/yuushya_modelling-26.1.2-2.4.2.jar` 只声明为 `runtimeOnly` 和 `benchImplementation`，绝不能 shade 进生产 Jar。它的审计信息见 [libs/README.md](../libs/README.md)。测试其他兼容构建时必须同时覆盖路径和已核实的 SHA-256：
+`libs/yuushya_modelling-26.1.2-2.4.2.jar` 声明为 `compileOnly`、`runtimeOnly` 和 `benchImplementation`，用于编译期 API 校验、开发运行和集成验收，但绝不能 shade 进生产 Jar。它的审计信息见 [libs/README.md](../libs/README.md)。测试其他兼容构建时必须同时覆盖路径和已核实的 SHA-256：
 
 ```shell
 ./gradlew runClient \
@@ -75,12 +73,12 @@
 
 - `core/`：不依赖 Minecraft 的场景、相机、投影、Gizmo、历史和几何检测。
 - `client/`：NeoForge Screen、选择器、环境捕获和渲染。
-- `compat/`：Yuushya 2.4.2 反射绑定、数据转换、验证和数据包提交。
-- `mixin/`：客户端世界更新的局部环境失效通知。
+- `compat/`：Yuushya 2.4.2 强类型 API 适配、数据转换、验证和数据包提交。
+- `mixin/`：原版 Screen 私有宿主状态的类型化 Accessor，以及客户端世界更新的局部环境失效通知。
 - `src/bench/`：只存在于验收运行中的真实客户端 Provider。
 - `src/test/`：host-neutral 单元测试。
 
-任何兼容层失败都必须保留原 Yuushya Screen，不能直接写方块实体 NBT，也不能引入第二套协议。
+任何兼容层失败都必须保留原 Yuushya Screen，不能直接写方块实体 NBT，也不能引入第二套协议。生产兼容层禁止使用 Java 反射；Yuushya API 变化应在编译或兼容构建验证阶段暴露。
 
 ## 测试策略
 

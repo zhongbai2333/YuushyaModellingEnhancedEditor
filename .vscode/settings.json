@@ -1,15 +1,6 @@
 {
     "java.compile.nullAnalysis.mode": "automatic",
-    "java.jdt.ls.java.home": "/Library/Java/JavaVirtualMachines/zulu-25.jdk/Contents/Home",
-    "java.import.gradle.java.home": "/Library/Java/JavaVirtualMachines/zulu-25.jdk/Contents/Home",
     "java.gradle.buildServer.enabled": "off",
-    "java.configuration.runtimes": [
-        {
-            "name": "JavaSE-25",
-            "path": "/Library/Java/JavaVirtualMachines/zulu-25.jdk/Contents/Home",
-            "default": true
-        }
-    ],
     "java.configuration.updateBuildConfiguration": "automatic",
     "java.import.generatesMetadataFilesAtProjectRoot": true
 }

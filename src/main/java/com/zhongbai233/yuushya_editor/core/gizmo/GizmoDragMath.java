@@ -52,6 +52,19 @@ public final class GizmoDragMath {
         return (float) Math.toDegrees(angle);
     }
 
+    /**
+     * Compensates for the rotation ring growing with the selection bounds. Without this,
+     * the same tangential mouse movement becomes progressively less sensitive on large models.
+     */
+    public static float scaleIndependentRotationDegrees(float rawDegrees, double rotationRadius) {
+        if (!Float.isFinite(rawDegrees)) throw new IllegalArgumentException("rawDegrees must be finite");
+        if (!Double.isFinite(rotationRadius) || rotationRadius <= 0.0D) {
+            throw new IllegalArgumentException("rotationRadius must be positive and finite");
+        }
+        double sensitivity = Math.max(1.0D, rotationRadius / GizmoSizingPolicy.MIN_ROTATION_RADIUS);
+        return (float) Math.clamp(rawDegrees * sensitivity, -180.0D, 180.0D);
+    }
+
     /** Screen-distance ratio used by the single overall-scale handle. */
     public static double uniformScaleFactor(double startingDistance, double currentDistance) {
         if (!Double.isFinite(startingDistance) || startingDistance <= 1.0E-9D

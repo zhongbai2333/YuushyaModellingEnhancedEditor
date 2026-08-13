@@ -8,10 +8,12 @@ import com.yuushya.modelling.blockentity.textblock.TextBlockEntity;
 import com.yuushya.modelling.blockentity.transformData.TransformBlockData;
 import com.yuushya.modelling.blockentity.transformData.TransformItemData;
 import com.yuushya.modelling.blockentity.transformData.TransformTextData;
+import com.yuushya.modelling.client.anvilcraft.rendering.CachedModeClient;
 import com.yuushya.modelling.gui.showblock.ShowBlockScreen;
 import com.yuushya.modelling.gui.itemblock.ItemBlockScreen;
 import com.yuushya.modelling.gui.textblock.TextBlockScreen;
 import com.yuushya.modelling.registries.BlockRegistry;
+import com.yuushya.modelling.registries.DataComponentRegistry;
 import com.zhongbai233.bench.api.BenchApiVersion;
 import com.zhongbai233.bench.api.BenchCompatibility;
 import com.zhongbai233.bench.api.ScenarioDescriptor;
@@ -28,6 +30,8 @@ import com.zhongbai233.bench.api.neoforge.client.BenchGuiSession;
 import com.zhongbai233.yuushya_editor.client.YuushyaEditorScreen;
 import com.zhongbai233.yuushya_editor.client.BlockPickerScreen;
 import com.zhongbai233.yuushya_editor.client.ItemPickerScreen;
+import com.zhongbai233.yuushya_editor.client.ItemContentEditorScreen;
+import com.zhongbai233.yuushya_editor.client.TextContentEditorScreen;
 import com.zhongbai233.yuushya_editor.client.ZFightWarningScreen;
 import com.zhongbai233.yuushya_editor.client.renderer.BlockPreviewPipRenderer;
 import com.zhongbai233.yuushya_editor.client.renderer.PreviewLineWidthPolicy;
@@ -35,18 +39,25 @@ import com.zhongbai233.yuushya_editor.client.environment.EnvironmentPreviewFrame
 import com.zhongbai233.yuushya_editor.client.environment.EnvironmentPreviewManager;
 import com.zhongbai233.yuushya_editor.client.widget.BlackGoldButton;
 import com.zhongbai233.yuushya_editor.compat.YuushyaTransformConversion;
+import com.zhongbai233.yuushya_editor.compat.YuushyaEditorHost;
 import com.zhongbai233.yuushya_editor.core.EditorTransform;
 import com.zhongbai233.yuushya_editor.core.EditorType;
+import com.zhongbai233.yuushya_editor.core.ItemModelData;
+import com.zhongbai233.yuushya_editor.core.SceneDocument;
+import com.zhongbai233.yuushya_editor.core.SceneLayer;
 import com.zhongbai233.yuushya_editor.core.TextModelData;
 import com.zhongbai233.yuushya_editor.core.camera.CameraFrame;
 import com.zhongbai233.yuushya_editor.core.camera.CameraState;
 import com.zhongbai233.yuushya_editor.core.gizmo.GizmoHandle;
 import com.zhongbai233.yuushya_editor.core.gizmo.GizmoHitTesting;
+import com.zhongbai233.yuushya_editor.core.gizmo.GizmoMode;
 import com.zhongbai233.yuushya_editor.core.gizmo.GizmoSizingPolicy;
+import com.zhongbai233.yuushya_editor.core.gizmo.GizmoSnapPolicy;
 import com.zhongbai233.yuushya_editor.core.preview.BlockPreviewTransform;
 import com.zhongbai233.yuushya_editor.core.preview.CollisionShape;
 import com.zhongbai233.yuushya_editor.core.projection.ProjectedPoint;
 import com.zhongbai233.yuushya_editor.core.projection.Projection;
+import com.zhongbai233.yuushya_editor.core.projection.Viewport;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.lang.reflect.Field;
@@ -66,6 +77,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.imageio.ImageIO;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.AbstractWidget;
+import net.minecraft.client.gui.components.MultiLineEditBox;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.input.MouseButtonInfo;
@@ -76,19 +89,23 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
+import org.joml.Quaternionf;
 import org.lwjgl.glfw.GLFW;
 
 /** Unattended integrated-client acceptance test for the real Yuushya show-block editor path. */
 public final class YuushyaEditorBenchProvider implements BenchClientProvider {
-    private static final String SCENARIO_ID = "yuushya-editor.overall-scale-apply";
+    private static final String SCENARIO_ID = "yuushya-editor.axis-scale-apply";
 
     public YuushyaEditorBenchProvider() { }
 
@@ -106,20 +123,20 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
     public void registerClient(BenchClientRegistrar registrar) {
         registrar.register(new ScenarioDescriptor(
                 SCENARIO_ID,
-                "Yuushya editor overall-scale apply",
+                "Yuushya editor axis-scale apply",
                 Set.of("client", "gui", "yuushya", "editor"),
                 Duration.ofSeconds(60)),
-                ignored -> new OverallScaleScenario());
+                ignored -> new AxisScaleScenario());
     }
 
-    private static final class OverallScaleScenario implements BenchClientScenario {
+    private static final class AxisScaleScenario implements BenchClientScenario {
         private static final double EPSILON = 1.0E-6D;
         private static final float FLOAT_EPSILON = 1.0E-6F;
         private static final Vector3d INITIAL_POSITION = new Vector3d(8.0D, 4.0D, -2.0D);
-        private static final Vector3d EXPECTED_POSITION = new Vector3d(4.0D, 2.0D, -1.0D);
+        private static final Vector3d EXPECTED_POSITION = new Vector3d(4.0D, 4.0D, -2.0D);
         private static final Vector3f INITIAL_ROTATION = new Vector3f(10.0F, 20.0F, 30.0F);
-        private static final Vector3f EXPECTED_SCALE = new Vector3f(2.0F, 2.0F, 2.0F);
-        private static final BenchGuiSelector OVERALL_SCALE = BenchGuiSelector.semanticName("overall-scale");
+        private static final Vector3f EXPECTED_SCALE = new Vector3f(2.0F, 1.0F, 1.0F);
+        private static final BenchGuiSelector SCALE_X = BenchGuiSelector.semanticName("scale-x");
         private static final BlockPos ENVIRONMENT_STONE_OFFSET = new BlockPos(3, -1, 2);
         private static final BlockPos ENVIRONMENT_GOLD_OFFSET = new BlockPos(-3, 0, -2);
         private static final int ENVIRONMENT_PLATFORM_RADIUS = 12;
@@ -128,6 +145,7 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
         private static final long MAX_ENVIRONMENT_CAPTURE_TICK_NANOS = 12_000_000L;
         private static final BlockPos ITEM_FIXTURE_OFFSET = new BlockPos(5, 0, 0);
         private static final BlockPos TEXT_FIXTURE_OFFSET = new BlockPos(7, 0, 0);
+        private static final BlockPos SHOW_FIXTURE_OFFSET = new BlockPos(-5, 0, 0);
 
         private final AtomicBoolean fixtureReady = new AtomicBoolean();
         private final AtomicBoolean serverCheckPending = new AtomicBoolean();
@@ -152,9 +170,12 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
         private CompletableFuture<Path> addedBlockScreenshot;
         private CompletableFuture<Path> zFightWarningScreenshot;
         private CompletableFuture<Path> itemPickerScreenshot;
+        private CompletableFuture<Path> itemSettingsScreenshot;
+        private CompletableFuture<Path> textEditorScreenshot;
         private boolean screenOpened;
         private boolean inspectorCommitted;
         private boolean gizmoInteractionsVerified;
+        private boolean selectionInteractionsVerified;
         private boolean collisionShapeChanged;
         private boolean renderedLayersVerified;
         private boolean farCameraRestored;
@@ -166,10 +187,21 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
         private boolean itemEditorOpened;
         private boolean itemPickerOpened;
         private boolean itemPickerReturned;
+        private boolean itemSettingsOpened;
+        private boolean itemSettingsApplied;
         private boolean itemDeleteSent;
+        private boolean itemRenderCacheInvalidated;
         private boolean textEditorOpened;
-        private boolean textUpdateSent;
+        private boolean textSettingsOpened;
+        private boolean textSettingsApplied;
+        private boolean textLayerAdded;
+        private boolean textSaveSent;
         private boolean environmentPreviewVerified;
+        private boolean initialCameraVerified;
+        private boolean layerClipboardVerified;
+        private boolean nativeBlockTransferVerified;
+        private boolean nativeItemTransferVerified;
+        private boolean nativeTextTransferVerified;
         private boolean environmentMutationRequested;
         private boolean environmentMutationVerified;
         private int warmupTicks;
@@ -214,18 +246,35 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
 
             if (!screenOpened) {
                 BlockPreviewPipRenderer.resetPerformanceCounters();
+                net.minecraft.client.Camera enteringCamera = context.minecraft().gameRenderer.getMainCamera();
+                Vector3d expectedCameraPosition = new Vector3d(
+                        enteringCamera.position().x - fixturePos.getX() - 0.5D,
+                        enteringCamera.position().y - fixturePos.getY() - 0.5D,
+                        enteringCamera.position().z - fixturePos.getZ() - 0.5D);
+                Quaternionf expectedCameraRotation = new Quaternionf(enteringCamera.rotation());
                 context.minecraft().setScreen(new ShowBlockScreen(clientEntity, null));
                 if (!(context.minecraft().screen instanceof YuushyaEditorScreen enhanced)) {
                     throw new AssertionError("ShowBlockScreen was not intercepted by YuushyaEditorScreen: "
                             + (context.minecraft().screen == null ? "null"
                             : context.minecraft().screen.getClass().getName()));
                 }
+                assertInitialCamera(enhanced, expectedCameraPosition, expectedCameraRotation,
+                        enteringCamera.getFov());
+                initialCameraVerified = true;
+                verifyLayerClipboard(enhanced);
+                layerClipboardVerified = true;
+                verifyNativeRoundTrip(enhanced);
+                nativeBlockTransferVerified = true;
+                invokePrivate(enhanced, "focusSelected", new Class<?>[0]);
+                setStableGizmoCamera(enhanced);
                 guiSession = context.automation().beginGuiSession(YuushyaEditorScreen.class);
                 transformBoxes = transformBoxes(enhanced);
-                if (transformBoxes.length != 7) {
-                    throw new AssertionError("Expected seven inspector fields, found " + transformBoxes.length);
+                if (transformBoxes.length != 9) {
+                    throw new AssertionError("Expected nine inspector fields, found " + transformBoxes.length);
                 }
-                guiSession.name(transformBoxes[6], "overall-scale");
+                guiSession.name(transformBoxes[6], "scale-x");
+                guiSession.name(transformBoxes[7], "scale-y");
+                guiSession.name(transformBoxes[8], "scale-z");
                 guiSession.name(collisionShapeButton(enhanced), "collision-shape");
                 guiSnapshot = guiSession.snapshot();
                 verifySnapshot(guiSnapshot);
@@ -272,23 +321,43 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
             throwAsyncFailure();
             if (!inspectorCommitted) {
                 YuushyaEditorScreen screen = requireEnhancedScreen(context);
+                EditorTransform beforeAxisScale = selectedTransform(screen);
                 transformBoxes[6].setValue("2.0");
                 Object committed = invokePrivate(screen, "commitInspector",
-                        new Class<?>[] {String.class}, "ModBench overall scale");
+                        new Class<?>[] {String.class}, "ModBench X-axis scale");
                 if (!Boolean.TRUE.equals(committed)) {
-                    throw new AssertionError("Editor rejected the valid overall scale value");
+                    throw new AssertionError("Editor rejected the valid X-axis scale value");
                 }
                 assertFieldValue(0, EXPECTED_POSITION.x);
                 assertFieldValue(1, EXPECTED_POSITION.y);
                 assertFieldValue(2, EXPECTED_POSITION.z);
                 assertFieldValue(6, EXPECTED_SCALE.x);
+                assertFieldValue(7, EXPECTED_SCALE.y);
+                assertFieldValue(8, EXPECTED_SCALE.z);
+                EditorTransform afterAxisScale = selectedTransform(screen);
+                if (!afterAxisScale.scale().equals(EXPECTED_SCALE)
+                        || BlockPreviewTransform.pivot(afterAxisScale)
+                                .distance(BlockPreviewTransform.pivot(beforeAxisScale)) > EPSILON) {
+                    throw new AssertionError("Inspector X-only scale changed another axis or moved the pivot: "
+                            + afterAxisScale);
+                }
                 verifySnapshot(guiSession.snapshot());
                 inspectorCommitted = true;
                 return BenchClientStepResult.CONTINUE;
             }
 
             if (!gizmoInteractionsVerified) {
-                verifyRotateAndScaleGizmos(requireEnhancedScreen(context));
+                YuushyaEditorScreen screen = requireEnhancedScreen(context);
+                verifySelectionInteractions(screen);
+                selectionInteractionsVerified = true;
+                guiSession = context.automation().beginGuiSession(YuushyaEditorScreen.class);
+                transformBoxes = transformBoxes(screen);
+                guiSession.name(transformBoxes[6], "scale-x");
+                guiSession.name(transformBoxes[7], "scale-y");
+                guiSession.name(transformBoxes[8], "scale-z");
+                guiSession.name(collisionShapeButton(screen), "collision-shape");
+                guiSnapshot = guiSession.snapshot();
+                verifyRotateAndScaleGizmos(screen);
                 verifySnapshot(guiSession.snapshot());
                 gizmoInteractionsVerified = true;
                 return BenchClientStepResult.CONTINUE;
@@ -338,12 +407,11 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
             }
 
             if (editorScreenshot == null) {
-                BenchCaptureOptions fullOptions = BenchCaptureOptions.defaults()
-                        .withHiddenHud(false).withStableFrames(4);
+                BenchCaptureOptions fullOptions = guiCaptureOptions();
                 editorScreenshot = context.automation().captureScreenshot(
-                        "yuushya-editor-overall-scale", fullOptions);
+                        "yuushya-editor-axis-scale", fullOptions);
                 scaleScreenshot = guiSession.captureWidget(
-                        "yuushya-editor-overall-scale-control", OVERALL_SCALE,
+                        "yuushya-editor-axis-scale-control", SCALE_X,
                         BenchGuiCaptureOptions.defaults().withPadding(4).withStableFrames(4)
                                 .failingOnClippedBounds());
                 return BenchClientStepResult.CONTINUE;
@@ -362,7 +430,7 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                         renderedLayerVerification);
             }
             if (!gizmoInteractionsVerified) {
-                throw new AssertionError("Rotate and overall-scale Gizmo interactions were not verified");
+                throw new AssertionError("Rotate and axis-scale Gizmo interactions were not verified");
             }
 
             if (farLineWidthScreenshot == null) {
@@ -378,8 +446,7 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                             + initialLineWidthScale + " -> " + farLineWidthScale);
                 }
                 farLineWidthScreenshot = context.automation().captureScreenshot(
-                        "yuushya-editor-far-line-width", BenchCaptureOptions.defaults()
-                                .withHiddenHud(false).withStableFrames(4));
+                        "yuushya-editor-far-line-width", guiCaptureOptions());
                 return BenchClientStepResult.CONTINUE;
             }
 
@@ -417,8 +484,7 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                 filterBlockPicker(picker, "minecraft:glass");
                 assertBlockPickerPreview(picker);
                 blockPickerScreenshot = context.automation().captureScreenshot(
-                        "yuushya-editor-block-picker", BenchCaptureOptions.defaults()
-                                .withHiddenHud(false).withStableFrames(4));
+                        "yuushya-editor-block-picker", guiCaptureOptions());
                 blockPickerOpened = true;
                 return BenchClientStepResult.CONTINUE;
             }
@@ -434,8 +500,7 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                 guiSession = context.automation().beginGuiSession(YuushyaEditorScreen.class);
                 assertGlassLayerAdded(screen);
                 addedBlockScreenshot = context.automation().captureScreenshot(
-                        "yuushya-editor-added-glass-selected", BenchCaptureOptions.defaults()
-                                .withHiddenHud(false).withStableFrames(4));
+                        "yuushya-editor-added-glass-selected", guiCaptureOptions());
                 blockAdditionVerified = true;
                 return BenchClientStepResult.CONTINUE;
             }
@@ -461,8 +526,7 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                 }
                 guiSession = context.automation().beginGuiSession(ZFightWarningScreen.class);
                 zFightWarningScreenshot = context.automation().captureScreenshot(
-                        "yuushya-editor-zfight-warning", BenchCaptureOptions.defaults()
-                                .withHiddenHud(false).withStableFrames(4));
+                        "yuushya-editor-zfight-warning", guiCaptureOptions());
                 zFightWarningOpened = true;
                 return BenchClientStepResult.CONTINUE;
             }
@@ -492,6 +556,8 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                 context.minecraft().setScreen(new ItemBlockScreen(entity, ItemStack.EMPTY));
                 YuushyaEditorScreen screen = requireEnhancedScreen(context);
                 assertEditorType(screen, EditorType.ITEM);
+                verifyNativeRoundTrip(screen);
+                nativeItemTransferVerified = true;
                 guiSession = context.automation().beginGuiSession(YuushyaEditorScreen.class);
                 itemEditorOpened = true;
                 return BenchClientStepResult.CONTINUE;
@@ -507,8 +573,7 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                 filterItemPicker(picker, "minecraft:diamond");
                 assertItemPickerPreview(picker);
                 itemPickerScreenshot = context.automation().captureScreenshot(
-                        "yuushya-editor-item-picker", BenchCaptureOptions.defaults()
-                                .withHiddenHud(false).withStableFrames(4));
+                        "yuushya-editor-item-picker", guiCaptureOptions());
                 itemPickerOpened = true;
                 return BenchClientStepResult.CONTINUE;
             }
@@ -525,13 +590,59 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                 itemPickerReturned = true;
                 return BenchClientStepResult.CONTINUE;
             }
+            if (!itemSettingsOpened) {
+                YuushyaEditorScreen screen = requireEnhancedScreen(context);
+                closeGuiSession();
+                invokePrivate(screen, "editSelectedContent", new Class<?>[0]);
+                if (!(context.minecraft().screen instanceof ItemContentEditorScreen settings)) {
+                    throw new AssertionError("Item layer did not open the complete settings editor");
+                }
+                invokePrivate(settings, "replaceItem", new Class<?>[] {ItemStack.class},
+                        Items.OAK_STAIRS.getDefaultInstance());
+                invokePrivate(settings, "toggleBlockMode", new Class<?>[0]);
+                invokePrivate(settings, "cycleProperty", new Class<?>[] {Property.class, int.class},
+                        BlockStateProperties.HORIZONTAL_FACING, 1);
+                Field colorField = ItemContentEditorScreen.class.getDeclaredField("colorBox");
+                if (!colorField.trySetAccessible()) {
+                    throw new IllegalStateException("Cannot access item settings colour field");
+                }
+                ((EditBox) colorField.get(settings)).setValue("#7F336699");
+                guiSession = context.automation().beginGuiSession(ItemContentEditorScreen.class);
+                itemSettingsScreenshot = context.automation().captureScreenshot(
+                        "yuushya-editor-item-settings", guiCaptureOptions());
+                itemSettingsOpened = true;
+                return BenchClientStepResult.CONTINUE;
+            }
+            if (!itemSettingsScreenshot.isDone()) return BenchClientStepResult.CONTINUE;
+            requirePng(itemSettingsScreenshot);
+            if (!itemSettingsApplied) {
+                if (!(context.minecraft().screen instanceof ItemContentEditorScreen settings)) {
+                    throw new AssertionError("Item settings closed before its state was verified");
+                }
+                closeGuiSession();
+                invokePrivate(settings, "save", new Class<?>[0]);
+                YuushyaEditorScreen screen = requireEnhancedScreen(context);
+                assertEditedBlockItem(screen);
+                SceneDocument<Object> itemDraft = draft(screen);
+                UUID secondLayer = itemDraft.layers().get(1).id();
+                invokePrivate(screen, "selectLayer", new Class<?>[] {UUID.class}, secondLayer);
+                guiSession = context.automation().beginGuiSession(YuushyaEditorScreen.class);
+                itemSettingsApplied = true;
+                return BenchClientStepResult.CONTINUE;
+            }
             if (!itemDeleteSent) {
                 YuushyaEditorScreen screen = requireEnhancedScreen(context);
                 invokePrivate(screen, "removeSelectedLayer", new Class<?>[0]);
+                ChunkPos itemChunk = ChunkPos.containing(fixturePos.offset(ITEM_FIXTURE_OFFSET));
+                CachedModeClient.INSTANCE.safeSet.remove(itemChunk);
                 screen.onClose();
                 if (context.minecraft().screen != null) {
                     throw new AssertionError("Item editor delete/autosave did not close");
                 }
+                if (!CachedModeClient.INSTANCE.safeSet.contains(itemChunk)) {
+                    throw new AssertionError("Item editor save did not invalidate Yuushya's cached world renderer");
+                }
+                itemRenderCacheInvalidated = true;
                 closeGuiSession();
                 itemDeleteSent = true;
                 return BenchClientStepResult.CONTINUE;
@@ -546,21 +657,65 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                 context.minecraft().setScreen(new TextBlockScreen(entity, List.of()));
                 YuushyaEditorScreen screen = requireEnhancedScreen(context);
                 assertEditorType(screen, EditorType.TEXT);
+                verifyNativeRoundTrip(screen);
+                nativeTextTransferVerified = true;
                 guiSession = context.automation().beginGuiSession(YuushyaEditorScreen.class);
                 textEditorOpened = true;
                 return BenchClientStepResult.CONTINUE;
             }
-            if (!textUpdateSent) {
+            if (!textSettingsOpened) {
                 YuushyaEditorScreen screen = requireEnhancedScreen(context);
-                invokePrivate(screen, "replaceSelectedContent",
-                        new Class<?>[] {Object.class, String.class},
-                        new TextModelData(List.of("\"Bench Updated\""), true, true), "ModBench text update");
+                closeGuiSession();
+                invokePrivate(screen, "editSelectedContent", new Class<?>[0]);
+                if (!(context.minecraft().screen instanceof TextContentEditorScreen editor)) {
+                    throw new AssertionError("Text layer did not open the text content editor");
+                }
+                setTextEditorValue(editor, "Bench Updated\nSecond Line");
+                pressTextOption(editor, "cullButton");
+                pressTextOption(editor, "mirrorButton");
+                guiSession = context.automation().beginGuiSession(TextContentEditorScreen.class);
+                textEditorScreenshot = context.automation().captureScreenshot(
+                        "yuushya-editor-text-editor", guiCaptureOptions());
+                textSettingsOpened = true;
+                return BenchClientStepResult.CONTINUE;
+            }
+            if (!textEditorScreenshot.isDone()) return BenchClientStepResult.CONTINUE;
+            requirePng(textEditorScreenshot);
+            if (!textSettingsApplied) {
+                if (!(context.minecraft().screen instanceof TextContentEditorScreen editor)) {
+                    throw new AssertionError("Text editor closed before its content was verified");
+                }
+                closeGuiSession();
+                invokePrivate(editor, "save", new Class<?>[0]);
+                YuushyaEditorScreen screen = requireEnhancedScreen(context);
+                assertEditedTextLayer(screen);
+                guiSession = context.automation().beginGuiSession(YuushyaEditorScreen.class);
+                textSettingsApplied = true;
+                return BenchClientStepResult.CONTINUE;
+            }
+            if (!textLayerAdded) {
+                YuushyaEditorScreen screen = requireEnhancedScreen(context);
+                closeGuiSession();
+                invokePrivate(screen, "openContentPicker", new Class<?>[0]);
+                if (!(context.minecraft().screen instanceof TextContentEditorScreen editor)) {
+                    throw new AssertionError("Add text did not open the text content editor");
+                }
+                setTextEditorValue(editor, "Bench Added");
+                invokePrivate(editor, "save", new Class<?>[0]);
+                screen = requireEnhancedScreen(context);
+                assertAddedTextLayer(screen);
+                guiSession = context.automation().beginGuiSession(YuushyaEditorScreen.class);
+                textLayerAdded = true;
+                return BenchClientStepResult.CONTINUE;
+            }
+            if (!textSaveSent) {
+                YuushyaEditorScreen screen = requireEnhancedScreen(context);
                 screen.onClose();
                 if (context.minecraft().screen != null) {
                     throw new AssertionError("Text editor content/autosave did not close");
                 }
                 closeGuiSession();
-                textUpdateSent = true;
+                textSaveSent = true;
                 return BenchClientStepResult.CONTINUE;
             }
             if (!textServerVerified.get()) pollStructuredUpdate(true);
@@ -578,6 +733,12 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
             if (!itemServerVerified.get() || !textServerVerified.get()) {
                 throw new AssertionError("Yuushya item/text editor packets were not verified on the server");
             }
+            if (!itemRenderCacheInvalidated) {
+                throw new AssertionError("Yuushya item world-render cache invalidation was not verified");
+            }
+            if (!selectionInteractionsVerified) {
+                throw new AssertionError("Viewport selection interactions were not verified");
+            }
             if (!fixtureRemoved.get()) throw new AssertionError("Benchmark fixture was not removed precisely");
             if (context.minecraft().screen != null) throw new AssertionError("A Screen remained open after Apply");
             if (!context.environment().isValid()) {
@@ -590,6 +751,8 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
             requirePng(addedBlockScreenshot);
             requirePng(zFightWarningScreenshot);
             requirePng(itemPickerScreenshot);
+            requirePng(itemSettingsScreenshot);
+            requirePng(textEditorScreenshot);
             if (!renderedLayersVerified) {
                 throw new AssertionError("Opaque/cutout/translucent preview layers were not visually verified");
             }
@@ -597,14 +760,24 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
             if (!zFightDuplicateAdded || !zFightWarningOpened) {
                 throw new AssertionError("Z-fighting warning and optimization were not verified");
             }
-            if (!itemPickerOpened || !itemPickerReturned) {
-                throw new AssertionError("Item picker preview flow was not verified");
+            if (!itemPickerOpened || !itemPickerReturned || !itemSettingsOpened || !itemSettingsApplied) {
+                throw new AssertionError("Item picker/settings/block-state flow was not verified");
+            }
+            if (!textEditorOpened || !textSettingsOpened || !textSettingsApplied
+                    || !textLayerAdded || !textSaveSent) {
+                throw new AssertionError("Text edit/add/multiline/flag flow was not verified");
             }
             if (!environmentPreviewVerified) throw new AssertionError("World environment preview was not verified");
             if (!environmentMutationVerified || environmentPerformance == null) {
                 throw new AssertionError("Event-driven environment invalidation was not verified");
             }
             if (!collisionShapeChanged) throw new AssertionError("Collision-shape control was not verified");
+            if (!initialCameraVerified || !layerClipboardVerified) {
+                throw new AssertionError("Initial camera or layer clipboard behavior was not verified");
+            }
+            if (!nativeBlockTransferVerified || !nativeItemTransferVerified || !nativeTextTransferVerified) {
+                throw new AssertionError("Yuushya native block/item/text transfer was not round-trip verified");
+            }
             if (environmentPerformance.maxCaptureSliceNanos() > MAX_ENVIRONMENT_CAPTURE_SLICE_NANOS
                     || environmentPerformance.maxTickCaptureNanos() > MAX_ENVIRONMENT_CAPTURE_TICK_NANOS) {
                 throw new AssertionError("Environment capture exceeded the client-thread budget: "
@@ -667,10 +840,15 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                             + environmentPerformance.chunkInvalidations() + "\n"
                             + "environment.eventDrivenInvalidation=true\n"
                             + "cache.verified=true\n");
-            context.artifacts().write("yuushya-overall-scale-verification.txt", "text/plain",
+            context.artifacts().write("yuushya-axis-scale-verification.txt", "text/plain",
                     "initial.position=" + INITIAL_POSITION + "\n"
                             + "applied.position=" + EXPECTED_POSITION + "\n"
                             + "applied.scale=" + EXPECTED_SCALE + "\n"
+                            + "axisScale.inspector=x-only\n"
+                            + "axisScale.gizmoAxes=x,y,z\n"
+                            + "axisScale.otherAxesUnchanged=true\n"
+                            + "axisScale.pivotPreserved=true\n"
+                            + "axisScale.undoExact=true\n"
                             + "server=" + serverVerification.get() + "\n"
                             + "otherLayersUnchanged=true\nfixtureRemoved=true\n"
                             + "blockPicker.search=minecraft:glass\n"
@@ -679,6 +857,23 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                             + "zFightWarning.detected=true\n"
                             + "zFightWarning.optimizeAndSave=true\n"
                             + "itemPicker.preview=minecraft:diamond\n"
+                            + "itemSettings.item=minecraft:oak_stairs\n"
+                            + "itemSettings.renderMode=block\n"
+                            + "itemSettings.blockStateComponent=true\n"
+                            + "itemSettings.color=0x7F336699\n"
+                            + "itemSettings.serverVerified=true\n"
+                            + "itemWorldRender.cacheInvalidated=true\n"
+                            + "selection.blankClear=true\n"
+                            + "selection.blankDragPreserves=true\n"
+                            + "selection.ctrlToggleThroughGizmo=true\n"
+                            + "selection.modifierGizmoDrag=true\n"
+                            + "gizmo.modifierSwitchDuringDrag=true\n"
+                            + "gizmo.controlFinePriority=true\n"
+                            + "textEditor.multiline=true\n"
+                            + "textEditor.culled=true\n"
+                            + "textEditor.mirror=true\n"
+                            + "textEditor.addLayer=true\n"
+                            + "textEditor.serverVerified=true\n"
                             + "collisionShape.initial=NONE\n"
                             + "collisionShape.applied=FENCE\n"
                             + "collisionShape.serverVerified=true\n"
@@ -690,6 +885,10 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                             + environmentShellCandidates + "\n"
                             + "environmentPreview.liveUpdate=emerald_block\n"
                             + "environmentPreview.eventDrivenInvalidation=true\n"
+                            + "environmentPreview.modeledBlocks=block,item,text\n"
+                            + "camera.initialPosePreserved=true\n"
+                            + "layerClipboard.copyPasteUndo=true\n"
+                            + "nativeTransfer.blockItemText=true\n"
                             + "exitAutosave.verified=true\n"
                             + "lineWidth.near=" + initialLineWidthScale + "\n"
                             + "lineWidth.far=" + farLineWidthScale + "\n"
@@ -788,12 +987,25 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                     List.of("\"Bench Text\""), false, false, true));
             textEntity.setSlot(0);
             textEntity.saveChanged();
+
+            BlockPos showPos = fixturePos.offset(SHOW_FIXTURE_OFFSET);
+            level.setBlockAndUpdate(showPos, BlockRegistry.SHOW_BLOCK.get().defaultBlockState()
+                    .setValue(YuushyaBlockStates.SHAPES, BlockShape.NONE));
+            if (!(level.getBlockEntity(showPos) instanceof ShowBlockEntity showEntity)) {
+                throw new IllegalStateException("Yuushya neighbor SHOW_BLOCK did not create ShowBlockEntity");
+            }
+            showEntity.getTransformData().clear();
+            showEntity.getTransformData().add(new TransformBlockData(new Vector3d(), new Vector3f(),
+                    new Vector3f(1.0F), Blocks.GLASS.defaultBlockState(), true));
+            showEntity.setSlot(0);
+            showEntity.saveChanged();
         }
 
         private void removeFixture(ServerLevel level) {
             level.removeBlock(fixturePos, false);
             level.removeBlock(fixturePos.offset(ITEM_FIXTURE_OFFSET), false);
             level.removeBlock(fixturePos.offset(TEXT_FIXTURE_OFFSET), false);
+            level.removeBlock(fixturePos.offset(SHOW_FIXTURE_OFFSET), false);
             for (int x = -ENVIRONMENT_PLATFORM_RADIUS; x <= ENVIRONMENT_PLATFORM_RADIUS; x++) {
                 for (int z = -ENVIRONMENT_PLATFORM_RADIUS; z <= ENVIRONMENT_PLATFORM_RADIUS; z++) {
                     level.removeBlock(fixturePos.offset(x, -1, z), false);
@@ -827,11 +1039,11 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                     double optimizedDistance = optimized.pos.distance(new Vector3d());
                     if (!optimized.blockState.is(Blocks.GLASS) || !optimized.isShown
                             || optimized.scales.distance(new Vector3f(1.0F)) > FLOAT_EPSILON
-                            || optimizedDistance <= EPSILON || optimizedDistance > 1.0E-4D) {
+                            || optimizedDistance <= EPSILON || optimizedDistance > 5.0E-3D) {
                         throw new AssertionError("Z-fighting optimization offset is missing or too visible: "
                                 + optimized.pos);
                     }
-                    serverVerification.set("scaleXYZ=2.0;position=4.0,2.0,-1.0;layers=5;"
+                    serverVerification.set("scaleXYZ=2.0,1.0,1.0;position=4.0,4.0,-2.0;layers=5;"
                             + "added=minecraft:glass@0,0,0;optimizedDuplicate=" + optimized.pos
                             + ";collisionShape=FENCE;autosave=onClose");
                     serverUpdateVerified.set(true);
@@ -851,15 +1063,30 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                         if (!(serverLevel().getBlockEntity(fixturePos.offset(ITEM_FIXTURE_OFFSET))
                                 instanceof ItemBlockEntity entity)) return;
                         List<TransformItemData> layers = entity.getTransformData();
-                        if (layers.isEmpty() || !layers.getFirst().itemStack.is(Items.GOLD_INGOT)) return;
+                        if (layers.isEmpty()) return;
+                        TransformItemData edited = layers.getFirst();
+                        BlockState itemState = edited.itemStack.get(DataComponentRegistry.BLOCKSTATE.get());
+                        if (!edited.itemStack.is(Items.OAK_STAIRS) || !edited.enableBlock
+                                || edited.color != 0x7F336699 || itemState == null
+                                || !itemState.is(Blocks.OAK_STAIRS)
+                                || itemState.getValue(BlockStateProperties.HORIZONTAL_FACING)
+                                        == Blocks.OAK_STAIRS.defaultBlockState()
+                                                .getValue(BlockStateProperties.HORIZONTAL_FACING)) return;
                         if (layers.stream().skip(1).anyMatch(layer -> !layer.itemStack.isEmpty())) return;
                         itemServerVerified.set(true);
                     } else {
                         if (!(serverLevel().getBlockEntity(fixturePos.offset(TEXT_FIXTURE_OFFSET))
                                 instanceof TextBlockEntity entity)) return;
                         List<TransformTextData> layers = entity.getTransformData();
-                        if (layers.size() != 1 || !layers.getFirst().textLines.equals(List.of("\"Bench Updated\""))
-                                || !layers.getFirst().isCulled || !layers.getFirst().isMirror) return;
+                        if (layers.size() != 2
+                                || !layers.getFirst().textLines.equals(
+                                        List.of("\"Bench Updated\"", "\"Second Line\""))
+                                || !layers.getFirst().isCulled || !layers.getFirst().isMirror
+                                || !layers.get(1).textLines.equals(List.of("\"Bench Added\""))
+                                || layers.get(1).isCulled || layers.get(1).isMirror
+                                || !layers.get(1).isShown
+                                || layers.get(1).pos.distance(new Vector3d()) > EPSILON
+                                || layers.get(1).scales.distance(new Vector3f(1.0F)) > FLOAT_EPSILON) return;
                         textServerVerified.set(true);
                         removeFixture(serverLevel());
                         fixtureRemoved.set(true);
@@ -901,7 +1128,13 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
         private boolean environmentFixtureReachedClient(BenchClientContext context) {
             return context.level().getBlockState(fixturePos.offset(ENVIRONMENT_STONE_OFFSET)).is(Blocks.STONE)
                     && context.level().getBlockState(fixturePos.offset(ENVIRONMENT_GOLD_OFFSET))
-                            .is(Blocks.GOLD_BLOCK);
+                            .is(Blocks.GOLD_BLOCK)
+                    && context.level().getBlockEntity(fixturePos.offset(SHOW_FIXTURE_OFFSET))
+                            instanceof ShowBlockEntity
+                    && context.level().getBlockEntity(fixturePos.offset(ITEM_FIXTURE_OFFSET))
+                            instanceof ItemBlockEntity
+                    && context.level().getBlockEntity(fixturePos.offset(TEXT_FIXTURE_OFFSET))
+                            instanceof TextBlockEntity;
         }
 
         private static boolean fixtureReachedClient(ShowBlockEntity entity) {
@@ -940,7 +1173,7 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                 throw new AssertionError("Position compensation mismatch: " + actual.pos);
             }
             if (!close(actual.scales, EXPECTED_SCALE)) {
-                throw new AssertionError("Scale axes were not synchronized: " + actual.scales);
+                throw new AssertionError("Independent X scale changed Y/Z or was not saved: " + actual.scales);
             }
             if (!close(actual.rot, INITIAL_ROTATION) || !actual.blockState.is(Blocks.STONE) || !actual.isShown) {
                 throw new AssertionError("Apply changed an unrelated target-layer property");
@@ -968,7 +1201,7 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                 if (node.visible()) nodes.add(node);
             }
             long editBoxes = nodes.stream().filter(node -> "edit-box".equals(node.role())).count();
-            if (editBoxes != 7) throw new AssertionError("GUI snapshot expected 7 EditBoxes, found " + editBoxes);
+            if (editBoxes != 9) throw new AssertionError("GUI snapshot expected 9 EditBoxes, found " + editBoxes);
             long ncpbThemeButtons = nodes.stream()
                     .filter(node -> BlackGoldButton.class.getName().equals(node.className())).count();
             if (ncpbThemeButtons < 10) {
@@ -978,10 +1211,10 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
             if (!snapshot.diagnostics().isEmpty()) {
                 throw new AssertionError("GUI snapshot diagnostics: " + snapshot.diagnostics());
             }
-            if (!OVERALL_SCALE.semanticName().equals(
+            if (!SCALE_X.semanticName().equals(
                     com.zhongbai233.bench.api.client.gui.BenchGuiSelectors
-                            .select(snapshot, OVERALL_SCALE).requireMatch().semanticName())) {
-                throw new AssertionError("Overall-scale semantic selector did not resolve exactly");
+                            .select(snapshot, SCALE_X).requireMatch().semanticName())) {
+                throw new AssertionError("X-axis scale semantic selector did not resolve exactly");
             }
             for (var node : nodes) {
                 var bounds = node.bounds();
@@ -1073,6 +1306,167 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
             Field field = YuushyaEditorScreen.class.getDeclaredField("camera");
             if (!field.trySetAccessible()) throw new IllegalStateException("Cannot access editor camera");
             return (CameraState) field.get(screen);
+        }
+
+        private static void setStableGizmoCamera(YuushyaEditorScreen screen)
+                throws ReflectiveOperationException {
+            CameraState focused = currentCamera(screen);
+            Vector3d focus = focused.focus();
+            CameraState stable = CameraState.lookingAt(focused.mode(),
+                    new Vector3d(focus).add(7.0D, 5.5D, 9.0D), focus,
+                    new Vector3d(0.0D, 1.0D, 0.0D), focused.fovDegrees(), focused.orthoScale(),
+                    focused.nearPlane(), focused.farPlane());
+            Field field = YuushyaEditorScreen.class.getDeclaredField("camera");
+            if (!field.trySetAccessible()) throw new IllegalStateException("Cannot set editor test camera");
+            field.set(screen, stable);
+        }
+
+        private static void assertInitialCamera(YuushyaEditorScreen screen, Vector3d expectedPosition,
+                Quaternionf expectedRotation, float expectedFov) throws ReflectiveOperationException {
+            CameraState actual = currentCamera(screen);
+            if (actual.position().distance(expectedPosition) > EPSILON) {
+                throw new AssertionError("Editor did not preserve the entering camera position: expected "
+                        + expectedPosition + ", found " + actual.position());
+            }
+            float rotationDot = Math.abs(actual.orientation().dot(expectedRotation));
+            if (1.0F - rotationDot > 1.0E-5F) {
+                throw new AssertionError("Editor did not preserve the entering camera direction: dot="
+                        + rotationDot);
+            }
+            if (Math.abs(actual.fovDegrees() - Math.clamp(expectedFov, 2.0F, 178.0F)) > FLOAT_EPSILON) {
+                throw new AssertionError("Editor did not preserve the entering camera FOV");
+            }
+        }
+
+        private static void verifyLayerClipboard(YuushyaEditorScreen screen) throws Exception {
+            SceneDocument<Object> before = draft(screen);
+            SceneLayer<Object> source = before.selectedLayer().orElseThrow();
+            invokePrivate(screen, "copySelectedLayer", new Class<?>[0]);
+            invokePrivate(screen, "pasteLayer", new Class<?>[0]);
+            SceneDocument<Object> pasted = draft(screen);
+            if (pasted.layers().size() != before.layers().size() + 1) {
+                throw new AssertionError("Layer paste did not append exactly one layer");
+            }
+            SceneLayer<Object> copy = pasted.selectedLayer().orElseThrow();
+            if (copy.id().equals(source.id()) || !copy.hostData().equals(source.hostData())
+                    || !copy.transform().equals(source.transform()) || copy.visible() != source.visible()) {
+                throw new AssertionError("Layer paste did not preserve data with a fresh identity");
+            }
+            boolean hierarchyUpdated = screen.children().stream()
+                    .filter(AbstractWidget.class::isInstance)
+                    .map(AbstractWidget.class::cast)
+                    .anyMatch(widget -> widget.getMessage().getString().contains(copy.name()));
+            if (!hierarchyUpdated) {
+                throw new AssertionError("Layer paste did not immediately rebuild the hierarchy rows");
+            }
+            invokePrivate(screen, "undo", new Class<?>[0]);
+            if (!draft(screen).equals(before)) {
+                throw new AssertionError("Undo did not exactly restore the document after layer paste");
+            }
+        }
+
+        @SuppressWarnings("unchecked")
+        private static void verifyNativeRoundTrip(YuushyaEditorScreen screen) throws Exception {
+            Field hostField = YuushyaEditorScreen.class.getDeclaredField("host");
+            if (!hostField.trySetAccessible()) throw new IllegalStateException("Cannot inspect editor host");
+            YuushyaEditorHost<Object> host = (YuushyaEditorHost<Object>) hostField.get(screen);
+            SceneDocument<Object> before = draft(screen);
+            String serialized = host.exportDocument(before);
+            if (serialized.isBlank()) throw new AssertionError("Yuushya native export returned no data");
+            SceneDocument<Object> imported = host.importDocument(serialized, before);
+            if (imported.layers().size() != before.layers().size()
+                    || !imported.collisionShape().equals(before.collisionShape())) {
+                throw new AssertionError("Yuushya native round trip changed document structure");
+            }
+            for (int slot = 0; slot < before.layers().size(); slot++) {
+                SceneLayer<Object> expected = before.layers().get(slot);
+                SceneLayer<Object> actual = imported.layers().get(slot);
+                if (!actual.hostData().equals(expected.hostData())
+                        || !closeTransform(actual.transform(), expected.transform())
+                        || actual.visible() != expected.visible()) {
+                    throw new AssertionError("Yuushya native round trip changed layer " + slot);
+                }
+            }
+        }
+
+        private static boolean closeTransform(EditorTransform first, EditorTransform second) {
+            return first.position().distance(second.position()) <= EPSILON
+                    && first.scale().distance(second.scale()) <= FLOAT_EPSILON
+                    && 1.0F - Math.abs(first.rotation().dot(second.rotation())) <= 1.0E-5F;
+        }
+
+        @SuppressWarnings("unchecked")
+        private static SceneDocument<Object> draft(YuushyaEditorScreen screen)
+                throws ReflectiveOperationException {
+            Field field = YuushyaEditorScreen.class.getDeclaredField("draft");
+            if (!field.trySetAccessible()) throw new IllegalStateException("Cannot access editor draft");
+            return (SceneDocument<Object>) field.get(screen);
+        }
+
+        private static void assertEditedBlockItem(YuushyaEditorScreen screen) throws Exception {
+            SceneDocument<Object> document = draft(screen);
+            if (document.layers().size() != 2
+                    || !(document.layers().getFirst().hostData() instanceof ItemModelData data)) {
+                throw new AssertionError("Item settings changed the document structure unexpectedly");
+            }
+            if (!data.itemStack().is(Items.OAK_STAIRS) || !data.enableBlock()
+                    || data.color() != 0x7F336699 || data.blockState() == null
+                    || !data.blockState().is(Blocks.OAK_STAIRS)
+                    || data.blockState().getValue(BlockStateProperties.HORIZONTAL_FACING)
+                            == Blocks.OAK_STAIRS.defaultBlockState()
+                                    .getValue(BlockStateProperties.HORIZONTAL_FACING)) {
+                throw new AssertionError("Item settings did not preserve item/block-state/colour edits: " + data);
+            }
+            Object content = invokePrivate(screen, "previewContent", new Class<?>[] {Object.class}, data);
+            if (!(content instanceof com.zhongbai233.yuushya_editor.client.renderer.BlockPreviewLayer.BlockContent block)
+                    || block.centerOnPivot()) {
+                throw new AssertionError("Block-mode item preview did not use native item-block coordinates");
+            }
+            BlockState stackState = data.itemStack().get(DataComponentRegistry.BLOCKSTATE.get());
+            if (!data.blockState().equals(stackState)) {
+                throw new AssertionError("Edited block state was not stored in Yuushya's item component");
+            }
+        }
+
+        private static void setTextEditorValue(TextContentEditorScreen screen, String value)
+                throws ReflectiveOperationException {
+            Field field = TextContentEditorScreen.class.getDeclaredField("editor");
+            if (!field.trySetAccessible()) throw new IllegalStateException("Cannot access text content field");
+            ((MultiLineEditBox) field.get(screen)).setValue(value);
+        }
+
+        private static void pressTextOption(TextContentEditorScreen screen, String fieldName)
+                throws ReflectiveOperationException {
+            Field field = TextContentEditorScreen.class.getDeclaredField(fieldName);
+            if (!field.trySetAccessible()) throw new IllegalStateException("Cannot access " + fieldName);
+            BlackGoldButton button = (BlackGoldButton) field.get(screen);
+            button.onPress(new MouseButtonEvent(button.getX() + button.getWidth() * 0.5D,
+                    button.getY() + button.getHeight() * 0.5D,
+                    new MouseButtonInfo(GLFW.GLFW_MOUSE_BUTTON_LEFT, 0)));
+        }
+
+        private static void assertEditedTextLayer(YuushyaEditorScreen screen) throws Exception {
+            SceneDocument<Object> document = draft(screen);
+            if (document.layers().size() != 1
+                    || !(document.layers().getFirst().hostData() instanceof TextModelData data)
+                    || !data.textLines().equals(List.of("\"Bench Updated\"", "\"Second Line\""))
+                    || !data.culled() || !data.mirror()) {
+                throw new AssertionError("Text editor did not retain multiline/culling/mirroring edits: "
+                        + document.layers());
+            }
+        }
+
+        private static void assertAddedTextLayer(YuushyaEditorScreen screen) throws Exception {
+            SceneDocument<Object> document = draft(screen);
+            if (document.layers().size() != 2
+                    || !(document.layers().get(1).hostData() instanceof TextModelData data)
+                    || !data.textLines().equals(List.of("\"Bench Added\""))
+                    || data.culled() || data.mirror()
+                    || !document.layers().get(1).transform().equals(EditorTransform.IDENTITY)
+                    || !document.layers().get(1).visible()) {
+                throw new AssertionError("New text layer did not use the expected defaults: "
+                        + document.layers());
+            }
         }
 
         private static CameraFrame currentCameraFrame(YuushyaEditorScreen screen) throws Exception {
@@ -1285,6 +1679,20 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                 throw new AssertionError("Environment edge was not stably dithered: retained="
                         + shellRetained + "/" + shellCandidates);
             }
+            boolean modeledBlock = false;
+            boolean modeledItem = false;
+            boolean modeledText = false;
+            for (var modeled : frame.modeledBlocks()) {
+                for (SceneLayer<Object> layer : modeled.layers()) {
+                    modeledBlock |= layer.hostData() instanceof BlockState;
+                    modeledItem |= layer.hostData() instanceof ItemModelData;
+                    modeledText |= layer.hostData() instanceof TextModelData;
+                }
+            }
+            if (!modeledBlock || !modeledItem || !modeledText) {
+                throw new AssertionError("Environment did not capture neighboring block/item/text models: "
+                        + frame.modeledBlocks());
+            }
             return new EnvironmentVerification(frame.retainedBlocks(), shellRetained, shellCandidates);
         }
 
@@ -1308,6 +1716,12 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
         private static YuushyaEditorScreen requireEnhancedScreen(BenchClientContext context) {
             if (context.minecraft().screen instanceof YuushyaEditorScreen screen) return screen;
             throw new AssertionError("Enhanced editor is no longer open");
+        }
+
+        private static BenchCaptureOptions guiCaptureOptions() {
+            // A GUI session already pins the expected screen. World readiness and frame-pacing
+            // gates add no image guarantee here and can time out in the void-world fixture.
+            return BenchCaptureOptions.immediate();
         }
 
         private static Path requirePng(CompletableFuture<Path> future) throws Exception {
@@ -1349,6 +1763,243 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                     + "render.layersVerified=true\n";
         }
 
+        private void verifySelectionInteractions(YuushyaEditorScreen screen) throws Exception {
+            SceneDocument<Object> initial = draft(screen);
+            UUID originalPrimary = initial.selectedLayerId();
+            UUID secondCandidate = null;
+            for (SceneLayer<Object> layer : initial.layers()) {
+                if (!layer.id().equals(originalPrimary)) {
+                    secondCandidate = layer.id();
+                    break;
+                }
+            }
+            if (secondCandidate == null) throw new AssertionError("Selection interaction bench needs a second layer");
+            UUID second = secondCandidate;
+            String secondName = initial.layers().stream().filter(layer -> layer.id().equals(second))
+                    .findFirst().orElseThrow().name();
+            ProjectedPoint secondRow = hierarchyLayerPoint(screen, secondName);
+            click(screen, secondRow, GLFW.GLFW_MOD_CONTROL, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            if (!second.equals(draft(screen).selectedLayerId()) || selectedLayerIds(screen).size() != 2) {
+                throw new AssertionError("Primary-button Ctrl-click did not create a two-layer selection");
+            }
+            click(screen, secondRow, GLFW.GLFW_MOD_CONTROL, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+            if (!originalPrimary.equals(draft(screen).selectedLayerId())
+                    || !selectedLayerIds(screen).equals(Set.of(originalPrimary))) {
+                throw new AssertionError("Primary-button Ctrl-click did not remove the second layer");
+            }
+            click(screen, secondRow, GLFW.GLFW_MOD_CONTROL, GLFW.GLFW_MOUSE_BUTTON_RIGHT);
+            if (!second.equals(draft(screen).selectedLayerId()) || selectedLayerIds(screen).size() != 2) {
+                throw new AssertionError("macOS-style Ctrl-click did not create a two-layer selection");
+            }
+
+            click(screen, visibleMoveHandle(screen), GLFW.GLFW_MOD_CONTROL);
+            if (!originalPrimary.equals(draft(screen).selectedLayerId())
+                    || !selectedLayerIds(screen).equals(Set.of(originalPrimary))) {
+                throw new AssertionError("Ctrl-click through the Gizmo did not remove the primary layer");
+            }
+
+            click(screen, visibleMoveHandle(screen), GLFW.GLFW_MOD_CONTROL);
+            if (!originalPrimary.equals(draft(screen).selectedLayerId())
+                    || !selectedLayerIds(screen).equals(Set.of(originalPrimary))) {
+                throw new AssertionError("Ctrl-click incorrectly cleared the sole selected layer");
+            }
+
+            CameraFrame frame = (CameraFrame) invokePrivate(screen, "currentCameraFrame", new Class<?>[0]);
+            Viewport viewport = frame.viewport();
+            double[][] candidates = {
+                    {viewport.x() + 2.0D, viewport.y() + 2.0D},
+                    {viewport.x() + viewport.width() - 3.0D, viewport.y() + 2.0D},
+                    {viewport.x() + 2.0D, viewport.y() + viewport.height() - 3.0D},
+                    {viewport.x() + viewport.width() - 3.0D, viewport.y() + viewport.height() - 3.0D}
+            };
+            boolean cleared = false;
+            double[] blankCandidate = null;
+            for (double[] candidate : candidates) {
+                click(screen, new ProjectedPoint(candidate[0], candidate[1], 0.0D, true, false), 0);
+                if (draft(screen).selectedLayerId() == null) {
+                    cleared = true;
+                    blankCandidate = candidate;
+                    break;
+                }
+            }
+            if (!cleared || !selectedLayerIds(screen).isEmpty()) {
+                throw new AssertionError("Clicking blank viewport space did not clear the selection");
+            }
+            invokePrivate(screen, "applySelectionClick",
+                    new Class<?>[] {UUID.class, boolean.class, boolean.class}, originalPrimary, false, false);
+            invokePrivate(screen, "syncInspector", new Class<?>[0]);
+
+            CameraState beforeBlankDragCamera = currentCamera(screen);
+            Set<UUID> beforeBlankDragSelection = selectedLayerIds(screen);
+            double towardCenterX = viewport.x() + viewport.width() * 0.5D - blankCandidate[0];
+            double towardCenterY = viewport.y() + viewport.height() * 0.5D - blankCandidate[1];
+            double towardCenterLength = Math.hypot(towardCenterX, towardCenterY);
+            ProjectedPoint blankDragStart = new ProjectedPoint(
+                    blankCandidate[0], blankCandidate[1], 0.0D, true, false);
+            ProjectedPoint blankDragEnd = new ProjectedPoint(
+                    blankCandidate[0] + towardCenterX / towardCenterLength * 24.0D,
+                    blankCandidate[1] + towardCenterY / towardCenterLength * 24.0D,
+                    0.0D, true, false);
+            drag(screen, blankDragStart, blankDragEnd, 0, "blank viewport orbit");
+            if (!beforeBlankDragSelection.equals(selectedLayerIds(screen))
+                    || !originalPrimary.equals(draft(screen).selectedLayerId())) {
+                throw new AssertionError("Dragging blank viewport space changed the layer selection");
+            }
+            if (beforeBlankDragCamera.equals(currentCamera(screen))) {
+                throw new AssertionError("Dragging blank viewport space did not orbit the camera");
+            }
+            setStableGizmoCamera(screen);
+
+            EditorTransform beforeModifiedDrag = selectedTransform(screen);
+            ProjectedPoint modifiedHandle = visibleMoveHandle(screen);
+            CameraFrame modifiedFrame = (CameraFrame) invokePrivate(
+                    screen, "currentCameraFrame", new Class<?>[0]);
+            ProjectedPoint modifiedCenter = Projection.project(
+                    BlockPreviewTransform.pivot(beforeModifiedDrag),
+                    modifiedFrame.matrices(), modifiedFrame.viewport());
+            double handleX = modifiedHandle.screenX() - modifiedCenter.screenX();
+            double handleY = modifiedHandle.screenY() - modifiedCenter.screenY();
+            double handleLength = Math.hypot(handleX, handleY);
+            if (handleLength <= EPSILON) {
+                throw new AssertionError("Move Gizmo handle collapsed onto its pivot");
+            }
+            double screenAxisX = handleX / handleLength;
+            double screenAxisY = handleY / handleLength;
+            verifyModifierSwitchDuringDrag(screen, modifiedHandle, screenAxisX, screenAxisY);
+            if (selectedTransform(screen).equals(beforeModifiedDrag)) {
+                throw new AssertionError("Modifier-switching Gizmo drag did not reach the transform logic");
+            }
+            invokePrivate(screen, "undo", new Class<?>[0]);
+            if (!selectedTransform(screen).equals(beforeModifiedDrag)) {
+                throw new AssertionError("Undo did not restore the modifier-assisted Gizmo drag");
+            }
+        }
+
+        private static void verifyModifierSwitchDuringDrag(YuushyaEditorScreen screen,
+                ProjectedPoint start, double screenAxisX, double screenAxisY) throws Exception {
+            MouseButtonInfo primary = new MouseButtonInfo(GLFW.GLFW_MOUSE_BUTTON_LEFT, 0);
+            MouseButtonEvent press = new MouseButtonEvent(start.screenX(), start.screenY(), primary);
+            if (!screen.mouseClicked(press, false)) {
+                throw new AssertionError("Modifier-switching Gizmo did not accept the mouse press");
+            }
+
+            double currentDistance = 18.0D;
+            ProjectedPoint current = pointAlong(start, screenAxisX, screenAxisY, currentDistance);
+            dragStep(screen, start, current, 0, "unmodified move");
+            EditorTransform unmodified = selectedTransform(screen);
+
+            screen.keyPressed(new KeyEvent(GLFW.GLFW_KEY_LEFT_SHIFT, 0, GLFW.GLFW_MOD_SHIFT));
+            assertBooleanField(screen, "gizmoDragShiftDown", true);
+            currentDistance += 7.0D;
+            ProjectedPoint shifted = pointAlong(start, screenAxisX, screenAxisY, currentDistance);
+            // Deliberately keep the mouse event modifiers at zero: the key event must switch
+            // precision even when the drag event retains its button-press modifier snapshot.
+            dragStep(screen, current, shifted, 0, "mid-drag Shift move");
+            EditorTransform shiftTransform = selectedTransform(screen);
+            if (shiftTransform.equals(unmodified)) {
+                throw new AssertionError("Pressing Shift during a Gizmo drag did not change its result");
+            }
+
+            screen.keyPressed(new KeyEvent(GLFW.GLFW_KEY_LEFT_CONTROL, 0,
+                    GLFW.GLFW_MOD_SHIFT | GLFW.GLFW_MOD_CONTROL));
+            assertBooleanField(screen, "gizmoDragShiftDown", true);
+            assertBooleanField(screen, "gizmoDragControlDown", true);
+            if (GizmoSnapPolicy.step(GizmoMode.MOVE, true, true)
+                    != GizmoSnapPolicy.FINE_MOVE_STEP) {
+                throw new AssertionError("Ctrl did not take fine-step priority over Shift");
+            }
+            currentDistance += 3.0D;
+            ProjectedPoint controlled = pointAlong(start, screenAxisX, screenAxisY, currentDistance);
+            dragStep(screen, shifted, controlled, 0, "mid-drag Ctrl+Shift move");
+            if (selectedTransform(screen).equals(shiftTransform)) {
+                throw new AssertionError("Pressing Ctrl during a Shift Gizmo drag did not change its result");
+            }
+
+            MouseButtonEvent release = new MouseButtonEvent(controlled.screenX(), controlled.screenY(), primary);
+            if (!screen.mouseReleased(release)) {
+                throw new AssertionError("Modifier-switching Gizmo did not accept the mouse release");
+            }
+            screen.keyReleased(new KeyEvent(GLFW.GLFW_KEY_LEFT_CONTROL, 0, GLFW.GLFW_MOD_SHIFT));
+            screen.keyReleased(new KeyEvent(GLFW.GLFW_KEY_LEFT_SHIFT, 0, 0));
+        }
+
+        private static ProjectedPoint pointAlong(ProjectedPoint start, double axisX, double axisY,
+                double distance) {
+            return new ProjectedPoint(start.screenX() + axisX * distance,
+                    start.screenY() + axisY * distance, start.depth(), true, false);
+        }
+
+        private static void dragStep(YuushyaEditorScreen screen, ProjectedPoint previous,
+                ProjectedPoint next, int modifiers, String context) {
+            MouseButtonEvent event = new MouseButtonEvent(next.screenX(), next.screenY(),
+                    new MouseButtonInfo(GLFW.GLFW_MOUSE_BUTTON_LEFT, modifiers));
+            if (!screen.mouseDragged(event,
+                    next.screenX() - previous.screenX(), next.screenY() - previous.screenY())) {
+                throw new AssertionError(context + " was not accepted");
+            }
+        }
+
+        private static void assertBooleanField(YuushyaEditorScreen screen, String name, boolean expected)
+                throws ReflectiveOperationException {
+            Field field = YuushyaEditorScreen.class.getDeclaredField(name);
+            if (!field.trySetAccessible()) throw new IllegalStateException("Cannot inspect " + name);
+            if (field.getBoolean(screen) != expected) {
+                throw new AssertionError(name + " did not update during the active Gizmo drag");
+            }
+        }
+
+        private static ProjectedPoint visibleMoveHandle(YuushyaEditorScreen screen) throws Exception {
+            EditorTransform transform = selectedTransform(screen);
+            CameraFrame frame = (CameraFrame) invokePrivate(screen, "currentCameraFrame", new Class<?>[0]);
+            Vector3d pivot = BlockPreviewTransform.pivot(transform);
+            double length = GizmoSizingPolicy.calculate(transform, frame).axisLength();
+            for (GizmoHandle axis : new GizmoHandle[] {GizmoHandle.X, GizmoHandle.Y, GizmoHandle.Z}) {
+                for (double direction : new double[] {-1.0D, 1.0D}) {
+                    ProjectedPoint projected = Projection.project(
+                            GizmoHitTesting.axisEndpoint(pivot, axis, length * direction),
+                            frame.matrices(), frame.viewport());
+                    boolean coveredByWidget = screen.children().stream()
+                            .filter(AbstractWidget.class::isInstance)
+                            .map(AbstractWidget.class::cast)
+                            .anyMatch(widget -> widget.isMouseOver(projected.screenX(), projected.screenY()));
+                    if (projected.visible() && !coveredByWidget) return projected;
+                }
+            }
+            throw new AssertionError("No visible move Gizmo handle is available");
+        }
+
+        private static Set<UUID> selectedLayerIds(YuushyaEditorScreen screen)
+                throws ReflectiveOperationException {
+            Field field = YuushyaEditorScreen.class.getDeclaredField("selectedLayerIds");
+            if (!field.trySetAccessible()) throw new IllegalStateException("Cannot inspect editor selection");
+            @SuppressWarnings("unchecked") Set<UUID> value = (Set<UUID>) field.get(screen);
+            return Set.copyOf(value);
+        }
+
+        private static ProjectedPoint hierarchyLayerPoint(YuushyaEditorScreen screen, String layerName) {
+            AbstractWidget row = screen.children().stream()
+                    .filter(AbstractWidget.class::isInstance)
+                    .map(AbstractWidget.class::cast)
+                    .filter(widget -> widget.getMessage().getString().contains(layerName))
+                    .findFirst()
+                    .orElseThrow(() -> new AssertionError("No hierarchy row for " + layerName));
+            return new ProjectedPoint(row.getX() + row.getWidth() * 0.5D,
+                    row.getY() + row.getHeight() * 0.5D, 0.0D, true, false);
+        }
+
+        private static void click(YuushyaEditorScreen screen, ProjectedPoint point, int modifiers) {
+            click(screen, point, modifiers, GLFW.GLFW_MOUSE_BUTTON_LEFT);
+        }
+
+        private static void click(YuushyaEditorScreen screen, ProjectedPoint point, int modifiers,
+                int button) {
+            MouseButtonInfo primary = new MouseButtonInfo(button, modifiers);
+            MouseButtonEvent event = new MouseButtonEvent(point.screenX(), point.screenY(), primary);
+            if (!screen.mouseClicked(event, false) || !screen.mouseReleased(event)) {
+                throw new AssertionError("Editor did not accept the scripted viewport click");
+            }
+        }
+
         private void verifyRotateAndScaleGizmos(YuushyaEditorScreen screen) throws Exception {
             EditorTransform baseline = selectedTransform(screen);
             CameraFrame rotationFrame = (CameraFrame) invokePrivate(
@@ -1371,7 +2022,7 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                     startRing, rotationFrame.matrices(), rotationFrame.viewport());
             ProjectedPoint endRotation = Projection.project(
                     endRing, rotationFrame.matrices(), rotationFrame.viewport());
-            drag(screen, startRotation, endRotation);
+            drag(screen, startRotation, endRotation, 0, "X rotation");
             EditorTransform rotated = selectedTransform(screen);
             if (rotated.rotation().equals(baseline.rotation())) {
                 throw new AssertionError("Rotate Gizmo drag did not change the selected rotation");
@@ -1382,14 +2033,15 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
             }
 
             if (!screen.keyPressed(new KeyEvent(GLFW.GLFW_KEY_R, 0, 0))) {
-                throw new AssertionError("R did not activate the overall-scale Gizmo");
+                throw new AssertionError("R did not activate the axis-scale Gizmo");
             }
             CameraFrame scaleFrame = (CameraFrame) invokePrivate(screen, "currentCameraFrame", new Class<?>[0]);
             ProjectedPoint center = Projection.project(pivot, scaleFrame.matrices(), scaleFrame.viewport());
             if (!center.visible()) throw new AssertionError("Selected pivot is not visible for scale Gizmo test");
             GizmoSizingPolicy.Sizes scaleSizes = GizmoSizingPolicy.calculate(baseline, scaleFrame);
-            Vector3d scaleEndpoint = null;
+            double scaleDragPixels = 12.0D;
             for (GizmoHandle axis : new GizmoHandle[] {GizmoHandle.X, GizmoHandle.Y, GizmoHandle.Z}) {
+                Vector3d scaleEndpoint = null;
                 for (double direction : new double[] {-1.0D, 1.0D}) {
                     Vector3d candidate = GizmoHitTesting.axisEndpoint(
                             pivot, axis, scaleSizes.scaleHandleLength() * direction);
@@ -1398,50 +2050,82 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                         break;
                     }
                 }
-                if (scaleEndpoint != null) break;
-            }
-            if (scaleEndpoint == null) {
-                throw new AssertionError("Adaptive scale handles are outside the viewport");
-            }
-            ProjectedPoint startScale = Projection.project(
-                    scaleEndpoint, scaleFrame.matrices(), scaleFrame.viewport());
-            double scaleDragFactor = 1.15D;
-            ProjectedPoint endScale = new ProjectedPoint(
-                    center.screenX() + (startScale.screenX() - center.screenX()) * scaleDragFactor,
-                    center.screenY() + (startScale.screenY() - center.screenY()) * scaleDragFactor,
-                    center.depth(), true, false);
-            drag(screen, startScale, endScale);
-            EditorTransform scaled = selectedTransform(screen);
-            if (Math.abs(scaled.scale().x - baseline.scale().x * (float) scaleDragFactor) > 1.0E-4F
-                    || BlockPreviewTransform.pivot(scaled).distance(pivot) > EPSILON) {
-                throw new AssertionError("Overall-scale Gizmo did not scale uniformly around the preserved pivot");
-            }
-            invokePrivate(screen, "undo", new Class<?>[0]);
-            if (!selectedTransform(screen).equals(baseline)) {
-                throw new AssertionError("Undo did not restore the scale Gizmo transaction exactly");
+                if (scaleEndpoint == null) {
+                    throw new AssertionError(axis + " scale handle is outside the viewport");
+                }
+                ProjectedPoint startScale = Projection.project(
+                        scaleEndpoint, scaleFrame.matrices(), scaleFrame.viewport());
+                double screenAxisX = startScale.screenX() - center.screenX();
+                double screenAxisY = startScale.screenY() - center.screenY();
+                double screenAxisLength = Math.hypot(screenAxisX, screenAxisY);
+                if (screenAxisLength <= EPSILON) {
+                    throw new AssertionError(axis + " scale handle collapsed onto its pivot");
+                }
+                ProjectedPoint endScale = new ProjectedPoint(
+                        startScale.screenX() + screenAxisX / screenAxisLength * scaleDragPixels,
+                        startScale.screenY() + screenAxisY / screenAxisLength * scaleDragPixels,
+                        center.depth(), true, false);
+                drag(screen, startScale, endScale, 0, axis + " scale");
+                EditorTransform scaled = selectedTransform(screen);
+                assertOnlyAxisScaled(axis, baseline.scale(), scaled.scale());
+                if (BlockPreviewTransform.pivot(scaled).distance(pivot) > EPSILON) {
+                    throw new AssertionError(axis + "-axis scale Gizmo moved the visible pivot");
+                }
+                invokePrivate(screen, "undo", new Class<?>[0]);
+                if (!selectedTransform(screen).equals(baseline)) {
+                    throw new AssertionError("Undo did not exactly restore the " + axis + " scale transaction");
+                }
             }
             assertFieldValue(0, EXPECTED_POSITION.x);
             assertFieldValue(1, EXPECTED_POSITION.y);
             assertFieldValue(2, EXPECTED_POSITION.z);
             assertFieldValue(6, EXPECTED_SCALE.x);
+            assertFieldValue(7, EXPECTED_SCALE.y);
+            assertFieldValue(8, EXPECTED_SCALE.z);
+        }
+
+        private static void assertOnlyAxisScaled(GizmoHandle axis, Vector3f before, Vector3f after) {
+            boolean targetGrew = switch (axis) {
+                case X -> after.x > before.x + 1.0E-4F;
+                case Y -> after.y > before.y + 1.0E-4F;
+                case Z -> after.z > before.z + 1.0E-4F;
+                default -> false;
+            };
+            boolean otherAxesUnchanged = (axis == GizmoHandle.X || Math.abs(after.x - before.x) <= 1.0E-4F)
+                    && (axis == GizmoHandle.Y || Math.abs(after.y - before.y) <= 1.0E-4F)
+                    && (axis == GizmoHandle.Z || Math.abs(after.z - before.z) <= 1.0E-4F);
+            if (!targetGrew || !otherAxesUnchanged) {
+                throw new AssertionError(axis + "-axis scale changed another axis: before=" + before
+                        + ", after=" + after);
+            }
         }
 
         private static void drag(YuushyaEditorScreen screen, ProjectedPoint start, ProjectedPoint end) {
+            drag(screen, start, end, 0, "Gizmo");
+        }
+
+        private static void drag(YuushyaEditorScreen screen, ProjectedPoint start, ProjectedPoint end,
+                int modifiers) {
+            drag(screen, start, end, modifiers, "Gizmo");
+        }
+
+        private static void drag(YuushyaEditorScreen screen, ProjectedPoint start, ProjectedPoint end,
+                int modifiers, String context) {
             if (!start.visible() || !end.visible()) {
-                throw new AssertionError("Gizmo drag endpoints are outside the editor viewport");
+                throw new AssertionError(context + " drag endpoints are outside the editor viewport");
             }
-            MouseButtonInfo primary = new MouseButtonInfo(GLFW.GLFW_MOUSE_BUTTON_LEFT, 0);
+            MouseButtonInfo primary = new MouseButtonInfo(GLFW.GLFW_MOUSE_BUTTON_LEFT, modifiers);
             MouseButtonEvent press = new MouseButtonEvent(start.screenX(), start.screenY(), primary);
             MouseButtonEvent release = new MouseButtonEvent(end.screenX(), end.screenY(), primary);
             if (!screen.mouseClicked(press, false)) {
-                throw new AssertionError("Gizmo did not accept the scripted mouse press");
+                throw new AssertionError(context + " Gizmo did not accept the scripted mouse press");
             }
             if (!screen.mouseDragged(release,
                     end.screenX() - start.screenX(), end.screenY() - start.screenY())) {
-                throw new AssertionError("Gizmo did not accept the scripted mouse drag");
+                throw new AssertionError(context + " Gizmo did not accept the scripted mouse drag");
             }
             if (!screen.mouseReleased(release)) {
-                throw new AssertionError("Gizmo did not accept the scripted mouse release");
+                throw new AssertionError(context + " Gizmo did not accept the scripted mouse release");
             }
         }
 

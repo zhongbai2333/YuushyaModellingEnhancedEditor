@@ -62,7 +62,7 @@ class GizmoHitTestingTest {
             for (double direction : new double[] {-1.0D, 1.0D}) {
                 ProjectedPoint endpoint = Projection.project(
                         GizmoHitTesting.axisEndpoint(origin, axis, 1.35D * direction), matrices, viewport);
-                assertEquals(GizmoHandle.UNIFORM, GizmoHitTesting.scaleHandleAt(
+                assertEquals(axis, GizmoHitTesting.scaleHandleAt(
                         endpoint.screenX(), endpoint.screenY(), origin, matrices, viewport, 1.35D, 4.0D));
             }
         }

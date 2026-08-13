@@ -68,15 +68,16 @@ Item layers preserve `ItemStack`, color, and `enableBlock`; text layers preserve
 mirroring. Their native `REMOVE` operation resets a slot, so the enhanced host compacts retained layers into the
 front of the list and clears trailing slots before sending the existing success packet.
 
-No stable public API exists for these classes, so the initial adapter binds reflectively to this exact contract.
-Every reflection failure must leave the original screen untouched and log a diagnostic. Do not silently submit
-through a replacement packet or write block-entity NBT directly.
+Yuushya is a required host dependency and the adapter compiles directly against this audited contract. Public
+entity/data/network APIs are called with strong types; Mixin Accessors expose only the private constructor state
+needed to replace the original screens. API drift must fail during compilation or compatibility verification,
+not as a late reflective error. Do not submit through a replacement packet or write block-entity NBT directly.
 
 ## Scope decisions
 
 The committed targets are `ShowBlockScreen`, `ItemBlockScreen`, and `TextBlockScreen`. They share the same editor
-workspace but use explicit reflective data/packet bindings for each Yuushya host type; a binding failure always
-falls back to that type's original screen.
+workspace and use explicit strongly typed data/packet adapters for each Yuushya host type; an adapter or Accessor
+failure leaves that type's original screen in place.
 
 The target UI is the NCPB-style scene editor: layer list, central scene viewport, transform inspector, shared
 camera matrices for rendering/projection/picking, Gizmo manipulation, and bounded undo/redo. Editing remains in
@@ -92,7 +93,7 @@ an immutable draft; normal exit validates and commits it, while the explicit dis
    submission; existing layers may be deleted but retained layers may not reorder.
 6. Submission uses Yuushya's existing packet types and finishes with its success/save signal; deletion is represented
    by native `REMOVE` plus front-compaction because Yuushya does not physically shrink transform lists.
-7. Visible block layers are checked for coplanar faces before save; the user may apply a reversible `1e-7` offset,
+7. Visible block layers are checked for coplanar faces before save; the user may apply a reversible `1e-4` offset,
    keep the overlap, or return to editing.
 8. A supported-version update requires compatibility tests and an in-game smoke test with both mods installed.
 
@@ -112,19 +113,19 @@ All seven steps are implemented for the three committed editor targets.
 
 ## Current implementation status
 
-- Steps 1–3 are implemented for ShowBlock, ItemBlock, and TextBlock through reflection-backed hosts and
-  `ScreenEvent.Opening`.
+- Steps 1–3 are implemented for ShowBlock, ItemBlock, and TextBlock through strongly typed hosts,
+  read-only Mixin Accessors, and `ScreenEvent.Opening`; production code does not use Java reflection.
 - The Screen now uses NCPB's black-gold workspace shell: element hierarchy on the left, a central PIP scene
-  viewport, compact two-column transform inspector on the right, top-right move/rotate/scale tool strip, bottom
+  viewport, compact three-column transform inspector on the right, top-right move/rotate/scale tool strip, bottom
   status/camera HUD, and the six-axis orientation widget. It retains Yuushya's immutable draft, bounded
   undo/redo, normal-exit autosave, explicit discard, and original-screen fallback semantics.
-- The inspector intentionally exposes seven values: position X/Y/Z, rotation X/Y/Z, and one overall scale.
-  Changing that scale writes the same value to SCALE_X/Y/Z and multiplies position by `oldScale / newScale`,
-  matching Yuushya's own screen. Leaving it unchanged preserves any legacy non-uniform raw scale vector.
+- The inspector exposes nine values: position X/Y/Z, rotation X/Y/Z, and independent scale X/Y/Z.
+  Scale changes write Yuushya's existing `SCALE_X/Y/Z` fields independently and compensate each raw position
+  component by `oldScale / newScale`, preserving the visible pivot without private data or protocol changes.
 - NCPB's host-neutral camera navigation subset, mouse policy, selection policy, Gizmo constraint math, and drag
   transaction are present. `W` exposes world-space X/Y/Z move handles, `E` exposes world-space rotation rings,
-  and `R` exposes a Yuushya-compatible overall-scale handle. All use a captured camera frame and commit one
-  history entry per pointer drag; scale preserves the visible pivot through position compensation.
+  and `R` exposes colored X/Y/Z scale handles. All use a captured camera frame and commit one history entry per
+  pointer drag; scale preserves the visible pivot through per-axis position compensation.
 - The viewport submits visible Minecraft `BlockState` values to a minimal PIP renderer using the current resource
   pack's baked models. It reproduces Yuushya's center-scale, translated-position, center-rotation composition;
   rendering, layer points, projection, and Gizmo picking share the resulting scaled pivot and `CameraFrame`.
@@ -150,7 +151,7 @@ All seven steps are implemented for the three committed editor targets.
 - Gizmo deltas use relative, modifier-aware snap levels (`0.1`/`0.05`/`0.001` for move and scale; `15°`/`5°`/
   `0.001°` for rotation), preventing an existing transform from jumping to a global grid when a drag starts.
 - Save-time Z-fighting detection compares transformed block faces in world space, ignores edge/point contact, and
-  offers a reversible `1e-7` offset optimization before packet submission.
+  offers a reversible `1e-4` offset optimization before packet submission.
 - The host exposes the ShowBlock world position to a read-only environment sampler. The editor captures only the
   fixed diameter-25 sphere around that position; stable coordinate-hash dithering scatters the outer three-block
   shell, while the origin ShowBlock is masked from the environment mesh. Environment sections cannot be selected,
@@ -164,13 +165,12 @@ All seven steps are implemented for the three committed editor targets.
   latter remain visible when a transparent/new block overlaps an opaque layer, so hierarchy, inspector, and scene
   selection cannot disagree visually.
 - Grid and Gizmo lines use NCPB's physical-pixel compensation path. Minor and four-unit major grid lines use
-  separate luminance/alpha levels; pulling the perspective camera away increases the tested scale from about
-  `2.31` to `4.75` while retaining thin close-up lines.
+  separate luminance/alpha levels; Bench verifies that close and distant camera positions retain usable line
+  weights without tying the documentation to one machine's measured scale.
 - The PIP renderer flushes its opaque, cutout, and sorted translucent sheets before restoring its temporary 3D
   projection. This is required for translucent blocks such as honey to reach the PIP framebuffer.
-- The Screen uses responsive NCPB-style dual-panel geometry at small logical resolutions. The Retina Bench
-  viewport (`427x240` logical) has seven visible inspector fields plus hierarchy, commit buttons, and tool strip
-  with no clipped or overlapping widgets.
+- The Screen uses responsive NCPB-style dual-panel geometry at small logical resolutions. Bench verifies that the
+  hierarchy, inspector, commit buttons, and tool strip remain usable without clipping or overlap.
 - Screen-side render inputs also preserve immutable snapshot identity: camera matrices are rebuilt only when the
   `CameraState` reference or viewport changes, editor-layer snapshots only when the immutable `SceneDocument`
   changes, environment snapshots only when sampled content changes, and Gizmo sizes only when their layer/camera
@@ -179,39 +179,43 @@ All seven steps are implemented for the three committed editor targets.
 - NeoForge 26.1 exposes public `GuiGraphicsExtractor.submitPictureInPictureRenderState` and
   `peekScissorStack` methods, so this implementation does not require NCPB's `GuiGraphicsExtractor` accessor
   Mixin.
-- The audited Yuushya Modelling 2.4.2 Jar is a default `runtimeOnly` file dependency, so ordinary `runClient`
-  loads both mods. Its version, required classes, and SHA-256 are checked before client/Bench runs. Overriding the
-  path also requires an explicitly audited `-Pyuushya_runtime_sha256=<sha256>` value.
+- The audited Yuushya Modelling 2.4.2 Jar is a `compileOnly` and development `runtimeOnly` dependency, so the
+  adapter compiles against its API and ordinary `runClient` loads both mods. Its version, required classes, and
+  SHA-256 are checked before client/Bench runs. Overriding the path also requires an explicitly audited
+  `-Pyuushya_runtime_sha256=<sha256>` value.
 - The generated metadata requires the audited `yuushya_modelling` `[2.4.2]` on the client. It must not require only
   Townscape's `yuushya` modId: the latest Townscape `26.1` source and 2.3.0 Jar still do not contain the
   modelling classes and explicitly detect `yuushya_modelling` as a separate mod.
-- Fifty-five tests pass. A property-free dual-Mod client reaches resource loading and reports compatibility target
-  `26.1-block-item-text`.
-- ModBench scenario `yuushya-editor.overall-scale-apply` runs against a real integrated server and real
+- Host-neutral tests cover transforms, selection, history, clipboard behavior, camera policy, collision handling,
+  and Z-fighting geometry. The ordinary dual-Mod development client reaches resource loading without enabling
+  the Bench plugin.
+- ModBench scenario `yuushya-editor.axis-scale-apply` runs against a real integrated server and real
   `ShowBlockEntity`. It checks Screen interception, the NCPB black-gold button shell, responsive GUI geometry,
-  overall-scale compensation, adaptive mouse rotate/scale drags plus exact undo, `onClose()` autosave packet
+  independent-axis scale compensation, isolated X/Y/Z mouse scale drags with unchanged sibling axes, stable pivots
+  and exact undo, `onClose()` autosave packet
   results, unchanged sibling layers, fixture cleanup, visible stone/oak-leaves/honey rendering, a dense 25×25
   platform plus gold environment sampling, registry preview/search, block and item-picker PIP previews, appending
   duplicate `minecraft:glass` layers at `(0,0,0)`, the real Z-fighting optimize-and-save decision and its
   server-side epsilon offset, selected-layer visibility, near/far line-width compensation, the `NONE → FENCE`
   collision-shape transition on the server, a live environment block update, real ItemBlock deletion, and real
-  TextBlock content/culling/mirroring updates. It hard-asserts in a dedicated unchanged warmup window that PIP
+  TextBlock multiline content/culling/mirroring updates, creation of a second text layer, and server reload. It
+  hard-asserts in a dedicated unchanged warmup window that PIP
   textures are reused more often than rendered, that model resolutions are a minority of edited instances, the
   shell is partly scattered, and
   persistent environment sections are rendered repeatedly after being compiled once. Environment capture also
-  has hard gates of 10 ms per bounded slice and 12 ms per client Tick. The latest verified run measured 3.17 ms
-  maximum slice, 4.85 ms maximum capture Tick, 4.18 ms mean, and 6.99 ms P95 MEASURE frame interval. The
-  authoritative report is `build.nosync/modBench/raw-results/default/client/summary.json`; capture and invalidation
-  counters are also captured in `artifacts/custom/yuushya-editor-performance.txt`.
+  has hard gates of 10 ms per bounded slice and 12 ms per client Tick. Per-run measurements are intentionally
+  kept out of this document; the authoritative report is
+  `build.nosync/modBench/raw-results/default/client/summary.json`, while capture and invalidation counters are
+  written to `artifacts/custom/yuushya-editor-performance.txt`.
 
 ## Development and Bench dependencies
 
-- `libs/yuushya_modelling-26.1.2-2.4.2.jar` is the default development `runtimeOnly` and Bench compile host. It is
-  validated by version, required classes, and SHA-256 in `verifyYuushyaRuntime`, never shaded into the production
-  Jar, and may be overridden only together with the audited `yuushya_runtime_sha256` property.
+- `libs/yuushya_modelling-26.1.2-2.4.2.jar` is the default `compileOnly`, development `runtimeOnly`, and Bench host.
+  It is validated by version, required classes, and SHA-256 in `verifyYuushyaRuntime`, never shaded into the
+  production Jar, and may be overridden only together with the audited `yuushya_runtime_sha256` property.
 - BenchMod is pinned to the immutable JitPack `0.1.2` release. The plugin injects API and Runtime modules from
   the same release, so no sibling checkout or Maven Local publication is required.
-- Run `./gradlew verifyYuushyaEditorBench` for the complete unattended client flow. Raw results live under
+- Run `./gradlew verifyYuushyaEditorBench -PenableModBench=true` for the complete unattended client flow. Raw results live under
   `build.nosync/modBench/raw-results/default/client`; a portable collection is written to
   `build.nosync/modBench/bundles/default/client`.
 - Run `./gradlew releaseBuild --no-build-cache --no-configuration-cache` for a clean distributable Jar. The task rejects filesystem

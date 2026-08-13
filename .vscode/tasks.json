@@ -40,6 +40,14 @@
 			"args": ["runClient"],
 			"isBackground": true,
 			"problemMatcher": []
+		},
+		{
+			"label": "NeoForge: verify ModBench",
+			"type": "shell",
+			"command": "./gradlew",
+			"args": ["verifyYuushyaEditorBench", "-PenableModBench=true", "--no-daemon"],
+			"isBackground": false,
+			"problemMatcher": []
 		}
 	]
 }

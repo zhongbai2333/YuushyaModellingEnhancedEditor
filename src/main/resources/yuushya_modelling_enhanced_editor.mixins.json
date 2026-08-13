@@ -4,7 +4,10 @@
   "package": "com.zhongbai233.yuushya_editor.mixin",
   "compatibilityLevel": "JAVA_25",
   "client": [
-    "ClientPacketListenerBlockUpdateMixin"
+    "ClientPacketListenerBlockUpdateMixin",
+    "ItemBlockScreenAccessor",
+    "ShowBlockScreenAccessor",
+    "TextBlockScreenAccessor"
   ],
   "injectors": {
     "defaultRequire": 0

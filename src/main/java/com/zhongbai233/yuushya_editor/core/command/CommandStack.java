@@ -42,5 +42,7 @@ public final class CommandStack<S> {
 
     public boolean canUndo() { return !undo.isEmpty(); }
     public boolean canRedo() { return !redo.isEmpty(); }
+    public int size() { return undo.size() + redo.size(); }
+    public int capacity() { return capacity; }
     public void clear() { undo.clear(); redo.clear(); }
 }

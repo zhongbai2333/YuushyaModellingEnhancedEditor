@@ -18,7 +18,7 @@ public final class ItemModelData {
     public ItemModelData(ItemStack itemStack, int color, boolean enableBlock, BlockState blockState) {
         this.itemStack = Objects.requireNonNull(itemStack, "itemStack").copy();
         this.color = color;
-        this.enableBlock = enableBlock;
+        this.enableBlock = enableBlock && blockState != null;
         this.blockState = blockState;
     }
 
@@ -28,17 +28,35 @@ public final class ItemModelData {
     public BlockState blockState() { return blockState; }
 
     public ItemModelData withItemStack(ItemStack value) {
-        return new ItemModelData(value, color, enableBlock, null);
+        return new ItemModelData(value, color, false, null);
+    }
+
+    public ItemModelData withItemStack(ItemStack value, BlockState valueBlockState) {
+        return new ItemModelData(value, color, enableBlock && valueBlockState != null, valueBlockState);
+    }
+
+    public ItemModelData withColor(int value) {
+        return new ItemModelData(itemStack, value, enableBlock, blockState);
+    }
+
+    public ItemModelData withBlockRendering(boolean value) {
+        return new ItemModelData(itemStack, color, value && blockState != null, blockState);
+    }
+
+    public ItemModelData withBlockState(ItemStack value, BlockState valueBlockState) {
+        return new ItemModelData(value, color, enableBlock && valueBlockState != null, valueBlockState);
     }
 
     @Override
     public boolean equals(Object other) {
         return other instanceof ItemModelData value && color == value.color
-                && enableBlock == value.enableBlock && ItemStack.matches(itemStack, value.itemStack);
+                && enableBlock == value.enableBlock && Objects.equals(blockState, value.blockState)
+                && ItemStack.matches(itemStack, value.itemStack);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(ItemStack.hashItemAndComponents(itemStack), itemStack.getCount(), color, enableBlock);
+        return Objects.hash(ItemStack.hashItemAndComponents(itemStack), itemStack.getCount(), color,
+                enableBlock, blockState);
     }
 }

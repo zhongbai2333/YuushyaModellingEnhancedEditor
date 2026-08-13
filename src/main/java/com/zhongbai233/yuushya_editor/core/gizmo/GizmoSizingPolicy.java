@@ -20,6 +20,13 @@ public final class GizmoSizingPolicy {
         Objects.requireNonNull(transform, "transform");
         Objects.requireNonNull(frame, "frame");
         double radius = worldBoundingRadius(transform);
+        return calculate(radius);
+    }
+
+    public static Sizes calculate(double radius) {
+        if (!Double.isFinite(radius) || radius < 0.0D) {
+            throw new IllegalArgumentException("selection radius must be finite and non-negative");
+        }
         return new Sizes(
                 Math.max(MIN_AXIS_LENGTH, radius + AXIS_CLEARANCE),
                 Math.max(MIN_ROTATION_RADIUS, radius + ROTATION_CLEARANCE),

@@ -53,10 +53,13 @@ public final class TextContentEditorScreen extends Screen {
         editor.setCharacterLimit(8192);
         editor.setValue(initialPlainText);
         addRenderableWidget(editor);
+        int optionWidth = Math.max(80, (panelWidth() - 28) / 2);
         cullButton = addRenderableWidget(new BlackGoldButton(x + 12, y + panelHeight() - 50,
-                104, 20, Component.empty(), button -> { culled = !culled; syncButtons(); }, BlackGoldUi.GOLD_DIM));
-        mirrorButton = addRenderableWidget(new BlackGoldButton(x + 120, y + panelHeight() - 50,
-                104, 20, Component.empty(), button -> { mirror = !mirror; syncButtons(); }, BlackGoldUi.GOLD_DIM));
+                optionWidth, 20, Component.empty(),
+                button -> { culled = !culled; syncButtons(); }, BlackGoldUi.GOLD_DIM));
+        mirrorButton = addRenderableWidget(new BlackGoldButton(x + 16 + optionWidth,
+                y + panelHeight() - 50, panelWidth() - optionWidth - 28, 20, Component.empty(),
+                button -> { mirror = !mirror; syncButtons(); }, BlackGoldUi.GOLD_DIM));
         addRenderableWidget(new BlackGoldButton(x + panelWidth() - 172, y + panelHeight() - 26,
                 76, 20, Component.translatable("screen.yuushya_modelling_enhanced_editor.cancel"),
                 button -> onClose(), 0xFFD04040));

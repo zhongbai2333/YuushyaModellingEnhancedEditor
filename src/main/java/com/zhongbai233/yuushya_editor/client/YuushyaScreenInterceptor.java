@@ -1,6 +1,9 @@
 package com.zhongbai233.yuushya_editor.client;
 
 import com.mojang.logging.LogUtils;
+import com.yuushya.modelling.gui.itemblock.ItemBlockScreen;
+import com.yuushya.modelling.gui.showblock.ShowBlockScreen;
+import com.yuushya.modelling.gui.textblock.TextBlockScreen;
 import com.zhongbai233.yuushya_editor.compat.Yuushya26EditorHost;
 import com.zhongbai233.yuushya_editor.compat.Yuushya26StructuredEditorHost;
 import java.util.Collections;
@@ -24,14 +27,12 @@ public final class YuushyaScreenInterceptor {
         if (screen == null || ORIGINAL_BYPASS.remove(screen)) {
             return;
         }
-        String className = screen.getClass().getName();
-        boolean showBlock = Yuushya26EditorHost.SCREEN_CLASS.equals(className);
-        boolean structured = Yuushya26StructuredEditorHost.ITEM_SCREEN_CLASS.equals(className)
-                || Yuushya26StructuredEditorHost.TEXT_SCREEN_CLASS.equals(className);
+        boolean showBlock = screen instanceof ShowBlockScreen;
+        boolean structured = screen instanceof ItemBlockScreen || screen instanceof TextBlockScreen;
         if (!showBlock && !structured) return;
         try {
             com.zhongbai233.yuushya_editor.compat.YuushyaEditorHost<Object> host = showBlock
-                    ? Yuushya26EditorHost.fromOriginalScreen(screen)
+                    ? Yuushya26EditorHost.fromOriginalScreen((ShowBlockScreen) screen)
                     : Yuushya26StructuredEditorHost.fromOriginalScreen(screen);
             event.setNewScreen(new YuushyaEditorScreen(host, screen));
             LOGGER.info("Opened enhanced Yuushya {} editor", host.editorType().name().toLowerCase());

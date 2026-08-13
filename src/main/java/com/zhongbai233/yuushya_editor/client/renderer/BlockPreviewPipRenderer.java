@@ -128,6 +128,7 @@ public final class BlockPreviewPipRenderer extends PictureInPictureRenderer<Bloc
         submitLayers(minecraft, nodeStorage, poseStack, viewProjection, state.layers());
         dispatcher.renderAllFeatures();
         if (state.showGrid()) drawGrid(poseStack);
+        drawModelingCellOutline(poseStack);
         drawCollisionShape(poseStack, state.collisionShape());
         drawSelectionOutlines(poseStack, state);
         if (state.gizmo() != null) drawGizmo(poseStack, state);
@@ -173,11 +174,16 @@ public final class BlockPreviewPipRenderer extends PictureInPictureRenderer<Bloc
     }
 
     private static Matrix4f previewMatrix(BlockPreviewLayer layer) {
-        return switch (layer.content()) {
-            case BlockPreviewLayer.BlockContent _ -> BlockPreviewTransform.matrix(layer.transform());
+        Matrix4f contentTransform = switch (layer.content()) {
+            case BlockPreviewLayer.BlockContent block -> block.centerOnPivot()
+                    ? BlockPreviewTransform.matrix(layer.transform())
+                    : BlockPreviewTransform.itemMatrix(layer.transform());
             case BlockPreviewLayer.ItemContent _ -> BlockPreviewTransform.itemMatrix(layer.transform());
             case BlockPreviewLayer.TextContent _ -> BlockPreviewTransform.textMatrix(layer.transform());
         };
+        Vector3d offset = layer.worldOffset();
+        return new Matrix4f().translate((float) offset.x, (float) offset.y, (float) offset.z)
+                .mul(contentTransform);
     }
 
     private static void submitText(Minecraft minecraft, SubmitNodeStorage nodeStorage, PoseStack poseStack,
@@ -260,6 +266,12 @@ public final class BlockPreviewPipRenderer extends PictureInPictureRenderer<Bloc
             line(buffer, pose, i, GROUND_GRID_Y, -8.0F, i, GROUND_GRID_Y, 8.0F, xColor, width);
             line(buffer, pose, -8.0F, GROUND_GRID_Y, i, 8.0F, GROUND_GRID_Y, i, zColor, width);
         }
+    }
+
+    private void drawModelingCellOutline(PoseStack poseStack) {
+        VertexConsumer buffer = bufferSource.getBuffer(RenderTypes.linesTranslucent());
+        box(buffer, poseStack.last(), -0.5F, -0.5F, -0.5F,
+                0.5F, 0.5F, 0.5F, 0xB845E7FF, 1.25F);
     }
 
     private void drawSelectionOutlines(PoseStack poseStack, BlockPreviewPipRenderState state) {
@@ -395,10 +407,15 @@ public final class BlockPreviewPipRenderer extends PictureInPictureRenderer<Bloc
 
     private static void drawScaleGizmo(VertexConsumer buffer, PoseStack.Pose pose,
             BlockPreviewPipRenderState state, BlockPreviewGizmo gizmo) {
-        boolean selected = gizmo.activeHandle() == GizmoHandle.UNIFORM;
-        int color = selected ? 0xFFFFE29A : 0xFFE8B94F;
-        float width = selected ? 2.4F : 1.5F;
         for (GizmoHandle axis : new GizmoHandle[] {GizmoHandle.X, GizmoHandle.Y, GizmoHandle.Z}) {
+            boolean selected = gizmo.activeHandle() == axis;
+            int color = switch (axis) {
+                case X -> selected ? 0xFFFF9B91 : 0xFFE65A46;
+                case Y -> selected ? 0xFFCAFF9F : 0xFFA0DC5A;
+                case Z -> selected ? 0xFF9DD9FF : 0xFF5AB4DC;
+                default -> throw new IllegalStateException("Unexpected scale axis " + axis);
+            };
+            float width = selected ? 2.4F : 1.5F;
             Vector3d negative = new Vector3d(axis.axis()).mul(-gizmo.scaleHandleLength());
             Vector3d positive = new Vector3d(axis.axis()).mul(gizmo.scaleHandleLength());
             line(buffer, pose, negative, positive, color, width);
@@ -406,7 +423,7 @@ public final class BlockPreviewPipRenderer extends PictureInPictureRenderer<Bloc
             drawScaleMarker(buffer, pose, state, gizmo, positive, selected, color, width);
         }
         box(buffer, pose, -0.055F, -0.055F, -0.055F, 0.055F, 0.055F, 0.055F,
-                color, width);
+                0xFFE8E8E8, 1.2F);
     }
 
     private static void drawScaleMarker(VertexConsumer buffer, PoseStack.Pose pose,

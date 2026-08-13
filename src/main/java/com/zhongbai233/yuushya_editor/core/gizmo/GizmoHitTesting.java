@@ -104,7 +104,7 @@ public final class GizmoHitTesting {
                 double distance = Math.hypot(mouseX - endpoint.screenX(), mouseY - endpoint.screenY());
                 if (distance <= bestDistance) {
                     bestDistance = distance;
-                    best = GizmoHandle.UNIFORM;
+                    best = handle;
                 }
             }
         }

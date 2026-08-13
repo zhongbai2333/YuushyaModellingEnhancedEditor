@@ -38,12 +38,15 @@ public final class CameraController {
         Vector3f right = forward.cross(up, new Vector3f());
         if (right.lengthSquared() > 1.0e-8F && pitchRadians != 0.0D) {
             right.normalize();
-            Vector3f candidate = new Quaternionf().rotateAxis((float) pitchRadians, right.x, right.y, right.z)
-                    .transform(new Vector3f(offsetF));
-            Vector3f candidateForward = new Vector3f(candidate).negate().normalize();
-            double alignment = Math.abs(candidateForward.dot(up));
-            double maximumAlignment = Math.cos(Math.toRadians(settings.minimumPoleAngleDegrees()));
-            if (alignment <= maximumAlignment) offsetF.set(candidate);
+            Vector3f normalizedOffset = new Vector3f(offsetF).normalize();
+            double currentElevation = Math.asin(clamp(normalizedOffset.dot(up), -1.0D, 1.0D));
+            double maximumElevation = Math.toRadians(90.0D - settings.minimumPoleAngleDegrees());
+            // Positive pitch rotates the camera offset toward -worldUp. Clamp the requested
+            // elevation before rotating so a large mouse impulse cannot jump across a pole.
+            double targetElevation = clamp(currentElevation - pitchRadians,
+                    -maximumElevation, maximumElevation);
+            double safePitch = currentElevation - targetElevation;
+            new Quaternionf().rotateAxis((float) safePitch, right.x, right.y, right.z).transform(offsetF);
         }
         offsetF.normalize((float) distance);
         Vector3d position = new Vector3d(focus).add(offsetF.x, offsetF.y, offsetF.z);

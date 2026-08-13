@@ -23,6 +23,16 @@ class GizmoSnapPolicyTest {
     }
 
     @Test
+    void controlFineStepWinsWhenBothModifiersAreDown() {
+        assertEquals(GizmoSnapPolicy.FINE_MOVE_STEP,
+                GizmoSnapPolicy.step(GizmoMode.MOVE, true, true));
+        assertEquals(GizmoSnapPolicy.FINE_MOVE_STEP,
+                GizmoSnapPolicy.step(GizmoMode.SCALE, true, true));
+        assertEquals(GizmoSnapPolicy.FINE_ROTATE_STEP,
+                GizmoSnapPolicy.step(GizmoMode.ROTATE, true, true));
+    }
+
+    @Test
     void snappingIsRelativeAndSymmetric() {
         assertEquals(0.1D, GizmoSnapPolicy.snapDelta(0.149D, 0.1D), 1.0E-12D);
         assertEquals(-0.1D, GizmoSnapPolicy.snapDelta(-0.149D, 0.1D), 1.0E-12D);

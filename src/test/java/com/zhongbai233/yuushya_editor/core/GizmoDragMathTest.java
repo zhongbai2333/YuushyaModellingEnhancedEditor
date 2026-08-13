@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.zhongbai233.yuushya_editor.core.gizmo.GizmoConstraint;
 import com.zhongbai233.yuushya_editor.core.gizmo.GizmoDragMath;
+import com.zhongbai233.yuushya_editor.core.gizmo.GizmoSizingPolicy;
 import com.zhongbai233.yuushya_editor.core.command.CommandStack;
 import com.zhongbai233.yuushya_editor.core.command.DragTransaction;
 import com.zhongbai233.yuushya_editor.core.projection.PickingRay;
@@ -31,6 +32,16 @@ class GizmoDragMathTest {
                 new Vector3d(0.0D, 1.0D, 0.0D),
                 new Vector3d(1.0D, 0.0D, 0.0D), new Vector3d(0.0D, 0.0D, -1.0D));
         assertEquals(90.0F, degrees, 1.0e-5F);
+    }
+
+    @Test
+    void rotationSensitivityCompensatesForAHandleGrowingWithTheModel() {
+        assertEquals(10.0F, GizmoDragMath.scaleIndependentRotationDegrees(
+                10.0F, GizmoSizingPolicy.MIN_ROTATION_RADIUS), 1.0e-5F);
+        assertEquals(40.0F, GizmoDragMath.scaleIndependentRotationDegrees(
+                10.0F, GizmoSizingPolicy.MIN_ROTATION_RADIUS * 4.0D), 1.0e-5F);
+        assertEquals(180.0F, GizmoDragMath.scaleIndependentRotationDegrees(
+                90.0F, GizmoSizingPolicy.MIN_ROTATION_RADIUS * 100.0D), 1.0e-5F);
     }
 
     @Test

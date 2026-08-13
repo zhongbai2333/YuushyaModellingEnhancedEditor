@@ -7,11 +7,13 @@ import net.minecraft.world.level.block.state.BlockState;
 
 /** Immutable Minecraft-free-lifecycle section data captured on the client thread. */
 public record EnvironmentSectionSnapshot(EnvironmentSectionKey section,
-        List<VisibleBlock> blocks, List<BlockState> neighborhoodStates,
+        List<VisibleBlock> blocks, List<EnvironmentModeledBlock> modeledBlocks,
+        List<BlockState> neighborhoodStates,
         byte[] neighborhoodLight, long fingerprint) {
     public EnvironmentSectionSnapshot {
         java.util.Objects.requireNonNull(section, "section");
         blocks = List.copyOf(java.util.Objects.requireNonNull(blocks, "blocks"));
+        modeledBlocks = List.copyOf(java.util.Objects.requireNonNull(modeledBlocks, "modeledBlocks"));
         neighborhoodStates = List.copyOf(java.util.Objects.requireNonNull(
                 neighborhoodStates, "neighborhoodStates"));
         neighborhoodLight = java.util.Objects.requireNonNull(
@@ -44,6 +46,7 @@ public record EnvironmentSectionSnapshot(EnvironmentSectionKey section,
     public boolean sameContent(EnvironmentSectionSnapshot other) {
         return other != null && fingerprint == other.fingerprint
                 && blocks.equals(other.blocks)
+                && modeledBlocks.equals(other.modeledBlocks)
                 && neighborhoodStates.equals(other.neighborhoodStates)
                 && Arrays.equals(neighborhoodLight, other.neighborhoodLight);
     }

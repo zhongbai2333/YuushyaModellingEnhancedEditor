@@ -1,6 +1,7 @@
 package com.zhongbai233.yuushya_editor.client.environment;
 
 import com.zhongbai233.yuushya_editor.core.environment.EnvironmentPreviewPolicy;
+import com.zhongbai233.yuushya_editor.compat.Yuushya26EnvironmentModelReader;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -118,9 +119,11 @@ public final class EnvironmentPreviewManager {
                 .thenComparingInt(value -> value.section().z())
                 .thenComparingInt(value -> value.section().x()));
         int blocks = ordered.stream().mapToInt(value -> value.blocks().size()).sum();
+        List<EnvironmentModeledBlock> modeledBlocks = ordered.stream()
+                .flatMap(value -> value.modeledBlocks().stream()).toList();
         cachedFrame = new EnvironmentPreviewFrame(generation,
                 origin.getX(), origin.getY(), origin.getZ(), ordered,
-                Set.copyOf(expected), blocks, initialRemaining.size());
+                Set.copyOf(expected), modeledBlocks, blocks, initialRemaining.size());
         frameDirty = false;
         return cachedFrame;
     }
@@ -233,6 +236,7 @@ public final class EnvironmentPreviewManager {
         private final List<BlockState> states = new ArrayList<>(EnvironmentNeighborhoodIndex.CELL_COUNT);
         private final byte[] light = new byte[EnvironmentNeighborhoodIndex.CELL_COUNT];
         private final List<EnvironmentSectionSnapshot.VisibleBlock> visible = new ArrayList<>();
+        private final List<EnvironmentModeledBlock> modeledBlocks = new ArrayList<>();
         private final boolean[] loadedChunks;
         private int index;
         private long fingerprint = 0xCBF29CE484222325L;
@@ -287,10 +291,19 @@ public final class EnvironmentPreviewManager {
             fingerprint = mixFingerprint(fingerprint, state.hashCode());
             fingerprint = mixFingerprint(fingerprint, packedLight & 0xFF);
 
-            if (localX >= 0 && localX < EnvironmentSectionKey.SIZE
+            boolean sectionCell = localX >= 0 && localX < EnvironmentSectionKey.SIZE
                     && localY >= 0 && localY < EnvironmentSectionKey.SIZE
-                    && localZ >= 0 && localZ < EnvironmentSectionKey.SIZE
-                    && isRenderable(state)) {
+                    && localZ >= 0 && localZ < EnvironmentSectionKey.SIZE;
+            if (retained && sectionCell) {
+                cursor.set(worldX, worldY, worldZ);
+                EnvironmentModeledBlock modeled = safeModeledBlock(cursor);
+                if (modeled != null) {
+                    modeledBlocks.add(modeled);
+                    fingerprint = mixFingerprint(fingerprint, modeled.hashCode());
+                }
+            }
+
+            if (sectionCell && isRenderable(state)) {
                 cursor.set(worldX, worldY, worldZ);
                 EnvironmentTintColors tint = new EnvironmentTintColors(
                         safeTint(BiomeColors.GRASS_COLOR_RESOLVER),
@@ -306,7 +319,7 @@ public final class EnvironmentPreviewManager {
             if (index < EnvironmentNeighborhoodIndex.CELL_COUNT) {
                 throw new IllegalStateException("Environment section capture is incomplete: " + key);
             }
-            return new EnvironmentSectionSnapshot(key, visible, states, light, fingerprint);
+            return new EnvironmentSectionSnapshot(key, visible, modeledBlocks, states, light, fingerprint);
         }
     }
 
@@ -327,6 +340,15 @@ public final class EnvironmentPreviewManager {
         } catch (Throwable failure) {
             if (failure instanceof VirtualMachineError fatal) throw fatal;
             return AIR;
+        }
+    }
+
+    private EnvironmentModeledBlock safeModeledBlock(BlockPos pos) {
+        try {
+            return Yuushya26EnvironmentModelReader.read(level.getBlockEntity(pos), pos);
+        } catch (Throwable failure) {
+            if (failure instanceof VirtualMachineError fatal) throw fatal;
+            return null;
         }
     }
 
