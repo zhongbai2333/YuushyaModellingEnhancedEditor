@@ -27,6 +27,8 @@ All notable changes to this project will be documented in this file.
   publish a separate BenchMod checkout to Maven Local.
 - CI now runs once per pull request or `master` update; the heavier integrated-client Bench is a `v*` release
   gate and must pass alongside the production build before GitHub publishes the release.
+- Automated tag publishing now marks only `-alpha` tags as prereleases; `-beta`, `-rc`, and stable tags create
+  normal GitHub Releases.
 - Environment capture now yields every 32 cells instead of after a complete 20×20 neighborhood plane.
 - Build inputs remain pinned to the audited Minecraft 26.1.2 / NeoForge 26.1.2.76 toolchain, while published
   metadata accepts Minecraft `[26.1.2,27)` and NeoForge `[26,)`, matching NCPB's compatibility policy.

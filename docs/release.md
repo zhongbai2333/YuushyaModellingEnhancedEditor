@@ -46,6 +46,8 @@ yuushya_modelling_enhanced_editor-<version>+mc26.1.2-neoforge.jar
 
 真实客户端 Bench 只在推送 `v*` tag 时运行，并在需要时通过 JitPack 加载固定版本的 BenchMod 插件、API 和 Runtime。生产构建通过后才启动 Bench，Bench 也通过后才创建 GitHub Release；构建失败时不会浪费客户端验收资源。Bench 报告和截图无论成功失败都会上传。普通 Pull Request 和 `master` 推送只运行生产构建。
 
+自动发布只把带 `-alpha` 后缀的 tag 标记为 prerelease；带 `-beta`、`-rc` 或不带阶段后缀的 tag 均创建正常 GitHub Release。
+
 ## 发布 tag
 
 只在本地和 CI 均通过后创建 tag：
