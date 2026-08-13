@@ -42,6 +42,9 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 
+- The thinnest preview-line tier is now two physical pixels, and deferred item/text/block batches are flushed
+  before grid, outline, collision, selection, and Gizmo overlays so background modeled items cannot cover
+  foreground editor lines.
 - CI IDE verification now materializes the patched Minecraft Jar before checking the generated classpath.
 - The integrated-client PIP cache gate now measures a dedicated unchanged warmup window instead of comparing
   cache reuse against legitimate redraws accumulated across the entire multi-screen scenario.

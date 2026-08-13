@@ -9,6 +9,8 @@ public final class PreviewLineWidthPolicy {
     private static final float BASE_SCALE = 1.30F;
     private static final float REFERENCE_DISTANCE = 4.0F;
     private static final float REFERENCE_ORTHO_HALF_HEIGHT = 3.0F;
+    private static final float MIN_VISIBLE_WIDTH = 2.0F;
+    private static final float MAX_VISIBLE_WIDTH = 8.0F;
     // PIP runs in physical pixels. A slightly higher ceiling than the original NCPB preview
     // keeps the grid readable on Retina displays when the camera is pulled very far away.
     private static final float MAX_SCALE = 6.0F;
@@ -30,6 +32,13 @@ public final class PreviewLineWidthPolicy {
     public static float orthographic(float halfHeight) {
         float viewRatio = Math.max(1.0F, finitePositive(halfHeight) / REFERENCE_ORTHO_HALF_HEIGHT);
         return clamp(BASE_SCALE * (float) Math.sqrt(viewRatio));
+    }
+
+    static float visibleWidth(float logicalWidth, float cameraScale) {
+        float safeLogicalWidth = finitePositive(logicalWidth);
+        float safeCameraScale = finitePositive(cameraScale);
+        return Math.clamp(safeLogicalWidth * safeCameraScale * 1.15F,
+                MIN_VISIBLE_WIDTH, MAX_VISIBLE_WIDTH);
     }
 
     private static float finitePositive(float value) {

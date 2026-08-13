@@ -52,6 +52,7 @@ public final class BlockPreviewPipRenderer extends PictureInPictureRenderer<Bloc
     private static long submittedBlocks;
     private static long frustumCulledBlocks;
     private static long modelCacheMisses;
+    private static long sceneGeometryFlushes;
     private final ProjectionMatrixBuffer projectionBuffer = new ProjectionMatrixBuffer(
             "yuushya_enhanced_editor_preview");
     private final EnvironmentPreviewGpuCache environmentGpuCache = new EnvironmentPreviewGpuCache();
@@ -127,6 +128,12 @@ public final class BlockPreviewPipRenderer extends PictureInPictureRenderer<Bloc
         environmentGpuCache.updateAndRender(state.environmentFrame(), poseStack.last().pose(), viewProjection);
         submitLayers(minecraft, nodeStorage, poseStack, viewProjection, state.layers());
         dispatcher.renderAllFeatures();
+        // Item/text/block feature nodes can leave vertices in RenderType-specific deferred
+        // buffers. Flush every scene batch before submitting overlays so a later item batch
+        // cannot paint over grid, cell, selection, collision, or Gizmo lines that are closer
+        // to the camera. The overlays still use normal depth testing against scene geometry.
+        bufferSource.endBatch();
+        sceneGeometryFlushes++;
         if (state.showGrid()) drawGrid(poseStack);
         drawModelingCellOutline(poseStack);
         drawCollisionShape(poseStack, state.collisionShape());
@@ -237,18 +244,20 @@ public final class BlockPreviewPipRenderer extends PictureInPictureRenderer<Bloc
         submittedBlocks = 0L;
         frustumCulledBlocks = 0L;
         modelCacheMisses = 0L;
+        sceneGeometryFlushes = 0L;
         EnvironmentPreviewGpuCache.resetCounters();
     }
 
     public static PerformanceSnapshot performanceSnapshot() {
         EnvironmentPreviewGpuCache.Performance environment = EnvironmentPreviewGpuCache.performance();
         return new PerformanceSnapshot(renderedTextures, reusedTextures, submittedBlocks,
-                frustumCulledBlocks, modelCacheMisses, environment.compiledSections(),
+                frustumCulledBlocks, modelCacheMisses, sceneGeometryFlushes, environment.compiledSections(),
                 environment.renderedSections(), environment.frustumCulledSections());
     }
 
     public record PerformanceSnapshot(long renderedTextures, long reusedTextures,
             long submittedBlocks, long frustumCulledBlocks, long modelCacheMisses,
+            long sceneGeometryFlushes,
             long environmentCompiledSections, long environmentRenderedSections,
             long environmentFrustumCulledSections) { }
 
@@ -474,9 +483,9 @@ public final class BlockPreviewPipRenderer extends PictureInPictureRenderer<Bloc
 
     private static void line(VertexConsumer buffer, PoseStack.Pose pose, float x1, float y1, float z1,
             float x2, float y2, float z2, int color, float width) {
-        // The previous 1 px floor was effectively hairline-thin on Retina displays. Keep
-        // camera-distance compensation, but move every auxiliary line up one visual step.
-        float visibleWidth = Math.clamp(width * ACTIVE_LINE_WIDTH_SCALE.get() * 1.15F, 1.5F, 8.0F);
+        // Keep camera-distance compensation while preventing the thinnest tier from
+        // collapsing into a Retina hairline.
+        float visibleWidth = PreviewLineWidthPolicy.visibleWidth(width, ACTIVE_LINE_WIDTH_SCALE.get());
         buffer.addVertex(pose, x1, y1, z1).setColor(color).setNormal(0.0F, 1.0F, 0.0F)
                 .setLineWidth(visibleWidth);
         buffer.addVertex(pose, x2, y2, z2).setColor(color).setNormal(0.0F, 1.0F, 0.0F)

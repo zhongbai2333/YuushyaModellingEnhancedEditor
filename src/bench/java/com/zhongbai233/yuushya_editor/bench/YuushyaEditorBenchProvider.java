@@ -800,6 +800,10 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
             if (performance.modelCacheMisses() >= performance.submittedBlocks()) {
                 throw new AssertionError("BlockState model cache did not reduce model resolutions: " + performance);
             }
+            if (performance.sceneGeometryFlushes() <= 0L) {
+                throw new AssertionError("Scene geometry was not flushed before editor line overlays: "
+                        + performance);
+            }
             if (performance.environmentCompiledSections() <= 0
                     || performance.environmentRenderedSections()
                             <= performance.environmentCompiledSections()) {
@@ -816,6 +820,8 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                             + "blocks.submitted=" + performance.submittedBlocks() + "\n"
                             + "blocks.frustumCulled=" + performance.frustumCulledBlocks() + "\n"
                             + "models.cacheMisses=" + performance.modelCacheMisses() + "\n"
+                            + "render.sceneGeometryFlushes=" + performance.sceneGeometryFlushes() + "\n"
+                            + "render.overlaysAfterSceneGeometry=true\n"
                             + "environment.sectionsCompiled="
                             + performance.environmentCompiledSections() + "\n"
                             + "environment.sectionDraws="
@@ -892,6 +898,8 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                             + "exitAutosave.verified=true\n"
                             + "lineWidth.near=" + initialLineWidthScale + "\n"
                             + "lineWidth.far=" + farLineWidthScale + "\n"
+                            + "lineWidth.minimumPhysicalPixels=2.0\n"
+                            + "render.overlaysAfterSceneGeometry=true\n"
                             + "gizmo.rotateAndScaleVerified=true\n"
                             + renderedLayerVerification);
         }
