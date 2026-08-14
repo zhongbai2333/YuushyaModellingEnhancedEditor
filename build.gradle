@@ -400,7 +400,7 @@ def verifyProductionJar = tasks.register('verifyProductionJar') {
                     }
                 }
                 if (!hasInteractionApi) {
-                    throw new GradleException('Nested Scene Editor Core does not contain the beta.3 interaction API')
+                    throw new GradleException('Nested Scene Editor Core does not contain the required interaction API')
                 }
             }
         }

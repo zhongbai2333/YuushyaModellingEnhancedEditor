@@ -7,6 +7,7 @@ import com.zhongbai233.yuushya_editor.compat.YuushyaScalePolicy;
 import com.zhongbai233.yuushya_editor.compat.YuushyaTransformConversion;
 import com.zhongbai233.yuushya_editor.client.renderer.BlockPreviewLayer;
 import com.zhongbai233.yuushya_editor.client.renderer.BlockPreviewGizmo;
+import com.zhongbai233.yuushya_editor.client.renderer.BlockPreviewPipRenderer;
 import com.zhongbai233.yuushya_editor.client.renderer.BlockPreviewPipRenderState;
 import com.zhongbai233.scene_editor.core.render.LineWidthPolicy;
 import com.zhongbai233.yuushya_editor.client.environment.EnvironmentPreviewFrame;
@@ -35,11 +36,11 @@ import com.zhongbai233.scene_editor.core.command.EditorCommand;
 import com.zhongbai233.scene_editor.core.session.EditorSessionPool;
 import com.zhongbai233.scene_editor.core.gizmo.GizmoDragMath;
 import com.zhongbai233.scene_editor.core.gizmo.GizmoHandle;
-import com.zhongbai233.scene_editor.core.gizmo.GizmoHitTesting;
 import com.zhongbai233.scene_editor.core.gizmo.GizmoMode;
 import com.zhongbai233.scene_editor.core.gizmo.GizmoSizingPolicy;
 import com.zhongbai233.scene_editor.core.gizmo.GizmoSnapPolicy;
 import com.zhongbai233.yuushya_editor.core.geometry.SelectionTransforms;
+import com.zhongbai233.yuushya_editor.core.geometry.SpatialOrdering;
 import com.zhongbai233.yuushya_editor.core.geometry.ZFightDetector;
 import com.zhongbai233.yuushya_editor.core.geometry.ZFightOptimizer;
 import com.zhongbai233.yuushya_editor.core.geometry.ZFightSaveCoordinator;
@@ -50,7 +51,9 @@ import com.zhongbai233.scene_editor.core.projection.EditorViewport;
 import com.zhongbai233.yuushya_editor.core.preview.BlockPreviewTransform;
 import com.zhongbai233.yuushya_editor.core.preview.BlockPreviewPicking;
 import com.zhongbai233.yuushya_editor.core.preview.CollisionShape;
+import com.zhongbai233.yuushya_editor.core.preview.ViewportGizmoHitTesting;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -120,6 +123,7 @@ public final class YuushyaEditorScreen extends Screen {
     private CameraFrame cachedCameraFrame;
     private SceneDocument<Object> cachedPreviewDraft;
     private EnvironmentPreviewFrame cachedPreviewEnvironmentFrame;
+    private UUID cachedPreviewHoveredLayerId;
     private List<BlockPreviewLayer> cachedPreviewLayers = List.of();
     private EditorCameraState camera;
     private BlackGoldButton visibilityButton;
@@ -248,9 +252,14 @@ public final class YuushyaEditorScreen extends Screen {
                 Component.translatable("screen.yuushya_modelling_enhanced_editor.paste_layer"),
                 button -> pasteLayer(), GOLD_DIM));
         int leftActionY = height - 52;
-        addRenderableWidget(new BlackGoldButton(8, leftActionY, halfLeft, 18,
+        int thirdLeft = Math.max(22, (leftWidth - 24) / 3);
+        addRenderableWidget(new BlackGoldButton(8, leftActionY, thirdLeft, 18,
                 Component.literal("▲"), button -> scrollLayers(-1), GOLD_DIM));
-        addRenderableWidget(new BlackGoldButton(12 + halfLeft, leftActionY, halfLeft, 18,
+        addRenderableWidget(new BlackGoldButton(12 + thirdLeft, leftActionY, thirdLeft, 18,
+                Component.translatable("screen.yuushya_modelling_enhanced_editor.organize_short"),
+                button -> organizeLayersSpatially(), BlackGoldUi.CYAN));
+        addRenderableWidget(new BlackGoldButton(16 + thirdLeft * 2, leftActionY,
+                leftWidth - thirdLeft * 2 - 24, 18,
                 Component.literal("▼"), button -> scrollLayers(1), GOLD_DIM));
         addRenderableWidget(new BlackGoldButton(8, height - 28, halfLeft, 20,
                 Component.translatable("screen.yuushya_modelling_enhanced_editor.undo"),
@@ -329,7 +338,7 @@ public final class YuushyaEditorScreen extends Screen {
     @Override
     public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         drawSidePanels(graphics);
-        drawViewport(graphics);
+        drawViewport(graphics, mouseX, mouseY);
         drawEditorHud(graphics);
         drawToolSelection(graphics);
         super.extractRenderState(graphics, mouseX, mouseY, partialTick);
@@ -392,7 +401,7 @@ public final class YuushyaEditorScreen extends Screen {
         }
     }
 
-    private void drawViewport(GuiGraphicsExtractor graphics) {
+    private void drawViewport(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
         int previewX = previewX();
         int previewWidth = previewWidth();
         graphics.fillGradient(previewX, 0, previewX + previewWidth, height,
@@ -407,7 +416,7 @@ public final class YuushyaEditorScreen extends Screen {
         EditorViewport viewport = editorViewport();
         CameraFrame frame = currentCameraFrame();
         SceneLayer<Object> selected = draft.selectedLayer().orElse(null);
-        submitBlockPreview(graphics, viewport, frame, selected);
+        submitBlockPreview(graphics, viewport, frame, selected, mouseX, mouseY);
         drawSelectedScreenMarker(graphics, viewport, frame, selected);
         drawOrientationWidget(graphics, viewport.x() + viewport.width() - ORIENTATION_WIDGET_MARGIN_RIGHT,
                 viewport.y() + viewport.height() - ORIENTATION_WIDGET_MARGIN_BOTTOM);
@@ -422,6 +431,7 @@ public final class YuushyaEditorScreen extends Screen {
             CameraFrame frame, SceneLayer<Object> selected) {
         if (selected == null || !selected.visible() || !(selected.hostData() instanceof BlockState)) return;
         Matrix4f transform = BlockPreviewTransform.matrix(selected.transform());
+        AABB bounds = BlockPreviewPipRenderer.selectionBounds((BlockState) selected.hostData());
         double minX = Double.POSITIVE_INFINITY;
         double minY = Double.POSITIVE_INFINITY;
         double maxX = Double.NEGATIVE_INFINITY;
@@ -430,7 +440,10 @@ public final class YuushyaEditorScreen extends Screen {
         for (int x = 0; x <= 1; x++) {
             for (int y = 0; y <= 1; y++) {
                 for (int z = 0; z <= 1; z++) {
-                    Vector3f world = transform.transformPosition(new Vector3f(x, y, z));
+                    float localX = (float) (x == 0 ? bounds.minX : bounds.maxX);
+                    float localY = (float) (y == 0 ? bounds.minY : bounds.maxY);
+                    float localZ = (float) (z == 0 ? bounds.minZ : bounds.maxZ);
+                    Vector3f world = transform.transformPosition(new Vector3f(localX, localY, localZ));
                     ProjectedPoint point = EditorProjection.project(new Vector3d(world),
                             frame.matrices(), frame.viewport());
                     if (point.behindCamera() || !Double.isFinite(point.screenX())
@@ -568,8 +581,7 @@ public final class YuushyaEditorScreen extends Screen {
     }
 
     private void submitBlockPreview(GuiGraphicsExtractor graphics, EditorViewport viewport, CameraFrame frame,
-            SceneLayer<Object> selected) {
-        List<BlockPreviewLayer> layers = previewLayers();
+            SceneLayer<Object> selected, double mouseX, double mouseY) {
         boolean anySelectedVisible = false;
         for (SceneLayer<Object> layer : selectedLayers()) {
             if (layer.visible()) {
@@ -579,9 +591,18 @@ public final class YuushyaEditorScreen extends Screen {
         }
         GizmoSizingPolicy.Sizes gizmoSizes = selected != null && anySelectedVisible
                 ? gizmoSizes(selected, frame) : null;
+        GizmoHandle hoveredHandle = GizmoHandle.NONE;
+        if (gizmoSizes != null && activeGizmoHandle == GizmoHandle.NONE && !draggingViewport
+                && insideViewport(mouseX, mouseY)) {
+            hoveredHandle = gizmoHandleAt(mouseX, mouseY, selected, frame);
+        }
+        SceneLayer<Object> hoveredLayer = hoveredHandle == GizmoHandle.NONE && !draggingViewport
+                && insideViewport(mouseX, mouseY) ? layerAt(mouseX, mouseY, frame) : null;
+        UUID hoveredLayerId = hoveredLayer == null ? null : hoveredLayer.id();
+        List<BlockPreviewLayer> layers = previewLayers(hoveredLayerId);
         Vector3d pivot = selectionPivot();
         BlockPreviewGizmo gizmo = gizmoSizes == null ? null
-                : new BlockPreviewGizmo(pivot, gizmoMode, activeGizmoHandle,
+                : new BlockPreviewGizmo(pivot, gizmoMode, activeGizmoHandle, hoveredHandle,
                         gizmoSizes.axisLength(), gizmoSizes.rotationRadius(), gizmoSizes.scaleHandleLength());
         graphics.submitPictureInPictureRenderState(new BlockPreviewPipRenderState(environmentFrame,
                 layers, frame, gizmo, draft.collisionShape(), LineWidthPolicy.forCamera(camera), true,
@@ -589,8 +610,9 @@ public final class YuushyaEditorScreen extends Screen {
                 graphics.peekScissorStack()));
     }
 
-    private List<BlockPreviewLayer> previewLayers() {
-        if (cachedPreviewDraft == draft && cachedPreviewEnvironmentFrame == environmentFrame) {
+    private List<BlockPreviewLayer> previewLayers(UUID hoveredLayerId) {
+        if (cachedPreviewDraft == draft && cachedPreviewEnvironmentFrame == environmentFrame
+                && Objects.equals(cachedPreviewHoveredLayerId, hoveredLayerId)) {
             return cachedPreviewLayers;
         }
         List<BlockPreviewLayer> layers = new ArrayList<>();
@@ -599,7 +621,7 @@ public final class YuushyaEditorScreen extends Screen {
             BlockPreviewLayer.Content content = previewContent(layer.hostData());
             if (content == null) continue;
             layers.add(new BlockPreviewLayer(content, layer.transform(),
-                    selectedLayerIds.contains(layer.id())));
+                    selectedLayerIds.contains(layer.id()), layer.id().equals(hoveredLayerId), new Vector3d()));
         }
         for (EnvironmentModeledBlock modeledBlock : environmentFrame.modeledBlocks()) {
             Vector3d offset = new Vector3d(
@@ -616,6 +638,7 @@ public final class YuushyaEditorScreen extends Screen {
         }
         cachedPreviewDraft = draft;
         cachedPreviewEnvironmentFrame = environmentFrame;
+        cachedPreviewHoveredLayerId = hoveredLayerId;
         cachedPreviewLayers = List.copyOf(layers);
         return cachedPreviewLayers;
     }
@@ -640,8 +663,8 @@ public final class YuushyaEditorScreen extends Screen {
         Vector3d pivot = selectionPivot();
         double radius = 0.0D;
         for (SceneLayer<Object> layer : selectedLayers()) {
-            radius = Math.max(radius, layerPivot(layer).distance(pivot)
-                    + GizmoSizingPolicy.worldBoundingRadius(layer.transform().scale()));
+            radius = Math.max(radius,
+                    layerPivot(layer).distance(pivot) + layerBoundingRadius(layer));
         }
         return GizmoSizingPolicy.calculate(radius);
     }
@@ -1143,6 +1166,41 @@ public final class YuushyaEditorScreen extends Screen {
         rebuildWidgets();
     }
 
+    private void organizeLayersSpatially() {
+        if (!commitInspector("numeric transform") || draft.layers().size() < 2) return;
+        List<SceneLayer<Object>> ordered = SpatialOrdering.nearestNeighbor(draft.layers(),
+                YuushyaEditorScreen::layerPivot);
+        List<SceneLayer<Object>> renumbered = new ArrayList<>(ordered.size());
+        for (int index = 0; index < ordered.size(); index++) {
+            SceneLayer<Object> layer = ordered.get(index);
+            renumbered.add(new SceneLayer<>(layer.id(), (index + 1) + "  " + withoutLayerOrdinal(layer.name()),
+                    layer.hostData(), layer.transform(), layer.visible()));
+        }
+        SceneDocument<Object> before = draft;
+        SceneDocument<Object> after = new SceneDocument<>(renumbered,
+                draft.selectedLayerId(), draft.collisionShape());
+        if (after.equals(before)) {
+            setStatus(Component.translatable(
+                    "screen.yuushya_modelling_enhanced_editor.status.layers_already_organized"), false);
+            return;
+        }
+        draft = history.execute(before, new SnapshotCommand(before, after, "organize layers spatially"));
+        ensureSelectedLayerVisible();
+        setStatus(Component.translatable(
+                "screen.yuushya_modelling_enhanced_editor.status.layers_organized", ordered.size()), false);
+        rebuildWidgets();
+    }
+
+    private static String withoutLayerOrdinal(String name) {
+        int separator = name.indexOf("  ");
+        if (separator <= 0) return name;
+        for (int index = 0; index < separator; index++) {
+            if (!Character.isDigit(name.charAt(index))) return name;
+        }
+        String value = name.substring(separator + 2);
+        return value.isBlank() ? name : value;
+    }
+
     private void exportNative() {
         if (!commitInspector("numeric transform")) return;
         try {
@@ -1188,19 +1246,7 @@ public final class YuushyaEditorScreen extends Screen {
     }
 
     private void selectLayerAt(double mouseX, double mouseY, boolean shiftDown, boolean controlDown) {
-        EditorViewport viewport = editorViewport();
-        CameraMatrices matrices = CameraMatrices.create(camera, viewport);
-        PickingRay ray = EditorProjection.rayFromScreen(mouseX, mouseY, matrices, viewport);
-        SceneLayer<Object> best = null;
-        double bestDistance = Double.POSITIVE_INFINITY;
-        for (SceneLayer<Object> layer : draft.layers()) {
-            if (!layer.visible()) continue;
-            double distance = BlockPreviewPicking.hitDistance(ray, layer.transform()).orElse(Double.POSITIVE_INFINITY);
-            if (distance < bestDistance) {
-                bestDistance = distance;
-                best = layer;
-            }
-        }
+        SceneLayer<Object> best = layerAt(mouseX, mouseY, currentCameraFrame());
         if (best != null) {
             applySelectionClick(best.id(), shiftDown, controlDown);
             ensureSelectedLayerVisible();
@@ -1208,6 +1254,28 @@ public final class YuushyaEditorScreen extends Screen {
             clearSelection();
         }
         rebuildWidgets();
+    }
+
+    private SceneLayer<Object> layerAt(double mouseX, double mouseY, CameraFrame frame) {
+        PickingRay ray = EditorProjection.rayFromScreen(mouseX, mouseY,
+                frame.matrices(), frame.viewport());
+        SceneLayer<Object> best = null;
+        double bestDistance = Double.POSITIVE_INFINITY;
+        for (SceneLayer<Object> layer : draft.layers()) {
+            if (!layer.visible()) continue;
+            BlockPreviewLayer.Content content = previewContent(layer.hostData());
+            if (content == null) continue;
+            Matrix4f matrix = BlockPreviewPipRenderer.previewMatrix(content, layer.transform());
+            AABB bounds = BlockPreviewPipRenderer.interactionBounds(content);
+            double distance = BlockPreviewPicking.hitDistance(ray, matrix,
+                    bounds.minX, bounds.minY, bounds.minZ,
+                    bounds.maxX, bounds.maxY, bounds.maxZ).orElse(Double.POSITIVE_INFINITY);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = layer;
+            }
+        }
+        return best;
     }
 
     private boolean commitInspector(String description) {
@@ -1244,19 +1312,19 @@ public final class YuushyaEditorScreen extends Screen {
             if (!transform.equals(selected.transform())) {
                 SceneDocument<Object> before = draft;
                 SceneDocument<Object> after = before;
-                Vector3d groupPivot = SelectionTransforms.pivot(before, selectedLayerIds);
+                Vector3d groupPivot = selectionPivot(before, selectedLayerIds);
                 if (!transform.scale().equals(selected.transform().scale())) {
                     Vector3f previousScale = selected.transform().scale();
                     Vector3f nextScale = transform.scale();
                     Vector3d factors = new Vector3d(nextScale.x / (double) previousScale.x,
                             nextScale.y / (double) previousScale.y,
                             nextScale.z / (double) previousScale.z);
-                    after = SelectionTransforms.scale(after, selectedLayerIds, groupPivot, factors);
+                    after = scaleSelectionAroundModelCenters(after, selectedLayerIds, groupPivot, factors);
                 }
                 if (!transform.rotation().equals(selected.transform().rotation())) {
                     Quaternionf inverse = selected.transform().rotation().invert(new Quaternionf());
                     Quaternionf delta = transform.rotation().mul(inverse, new Quaternionf()).normalize();
-                    after = SelectionTransforms.rotate(after, selectedLayerIds, groupPivot, delta);
+                    after = rotateSelectionAroundModelCenters(after, selectedLayerIds, groupPivot, delta);
                 }
                 SceneLayer<Object> provisionalPrimary = after.selectedLayer().orElseThrow();
                 Vector3d translation = BlockPreviewTransform.pivot(transform)
@@ -1600,8 +1668,8 @@ public final class YuushyaEditorScreen extends Screen {
         SceneLayer<Object> selected = draft.selectedLayer().orElse(null);
         if (selected == null) return;
         Vector3d pivot = selectionPivot();
-        double radius = selectedLayers().stream().mapToDouble(layer -> layerPivot(layer).distance(pivot)
-                + GizmoSizingPolicy.worldBoundingRadius(layer.transform().scale())).max().orElse(1.0D);
+        double radius = selectedLayers().stream().mapToDouble(layer ->
+                layerPivot(layer).distance(pivot) + layerBoundingRadius(layer)).max().orElse(1.0D);
         camera = cameraController.focus(camera, pivot, Math.max(1.0D, radius * 2.0D),
                 editorViewport(), WORLD_UP);
     }
@@ -1702,8 +1770,8 @@ public final class YuushyaEditorScreen extends Screen {
             double groupFactor = requested / initial;
             Vector3d factors = new Vector3d(1.0D);
             setScaleComponent(factors, activeGizmoHandle, groupFactor);
-            changedDocument = SelectionTransforms.scale(transaction.before(), session.selectedLayerIds(),
-                    session.origin(), factors);
+            changedDocument = scaleSelectionAroundModelCenters(transaction.before(),
+                    session.selectedLayerIds(), session.origin(), factors);
         } else {
             PickingRay ray = EditorProjection.rayFromScreen(mouseX, mouseY, session.frame().matrices(),
                     session.frame().viewport());
@@ -1727,8 +1795,8 @@ public final class YuushyaEditorScreen extends Screen {
                         GizmoSnapPolicy.step(GizmoMode.ROTATE, shiftDown, controlDown));
                 Quaternionf delta = new Quaternionf().rotationAxis((float) Math.toRadians(degrees),
                         (float) session.axis().x, (float) session.axis().y, (float) session.axis().z);
-                changedDocument = SelectionTransforms.rotate(transaction.before(), session.selectedLayerIds(),
-                        session.origin(), delta);
+                changedDocument = rotateSelectionAroundModelCenters(transaction.before(),
+                        session.selectedLayerIds(), session.origin(), delta);
             }
         }
         draft = transaction.update(ignored -> changedDocument);
@@ -1740,11 +1808,14 @@ public final class YuushyaEditorScreen extends Screen {
         Vector3d origin = selectionPivot();
         GizmoSizingPolicy.Sizes sizes = gizmoSizes(selected, frame);
         return switch (gizmoMode) {
-            case MOVE -> GizmoHitTesting.moveHandleAt(mouseX, mouseY, origin,
+            case MOVE -> ViewportGizmoHitTesting.axisHandleAt(mouseX, mouseY, origin,
                     frame.matrices(), frame.viewport(), sizes.axisLength(), GIZMO_HIT_RADIUS);
-            case ROTATE -> GizmoHitTesting.rotateHandleAt(mouseX, mouseY, origin,
+            case ROTATE -> ViewportGizmoHitTesting.rotationHandleAt(mouseX, mouseY, origin,
                     frame.matrices(), frame.viewport(), sizes.rotationRadius(), GIZMO_HIT_RADIUS);
-            case SCALE -> GizmoHitTesting.scaleHandleAt(mouseX, mouseY, origin,
+            // Scale axes use the same visible bidirectional segments as move axes. Reusing the
+            // segment hit test makes both the shaft and its end marker draggable while preserving
+            // the center dead zone that prevents ambiguous axis selection.
+            case SCALE -> ViewportGizmoHitTesting.axisHandleAt(mouseX, mouseY, origin,
                     frame.matrices(), frame.viewport(), sizes.scaleHandleLength(), GIZMO_HIT_RADIUS);
         };
     }
@@ -1781,7 +1852,81 @@ public final class YuushyaEditorScreen extends Screen {
     }
 
     private static Vector3d layerPivot(SceneLayer<Object> layer) {
-        return BlockPreviewTransform.pivot(layer.transform());
+        BlockPreviewLayer.Content content = previewContent(layer.hostData());
+        if (content == null) return BlockPreviewTransform.pivot(layer.transform());
+        AABB bounds = BlockPreviewPipRenderer.interactionBounds(content);
+        Vector3f localCenter = new Vector3f((float) ((bounds.minX + bounds.maxX) * 0.5D),
+                (float) ((bounds.minY + bounds.maxY) * 0.5D),
+                (float) ((bounds.minZ + bounds.maxZ) * 0.5D));
+        Matrix4f matrix = BlockPreviewPipRenderer.previewMatrix(content, layer.transform());
+        return new Vector3d(matrix.transformPosition(localCenter));
+    }
+
+    private static double layerBoundingRadius(SceneLayer<Object> layer) {
+        BlockPreviewLayer.Content content = previewContent(layer.hostData());
+        if (content == null) return GizmoSizingPolicy.worldBoundingRadius(layer.transform().scale());
+        AABB bounds = BlockPreviewPipRenderer.interactionBounds(content);
+        Matrix4f matrix = BlockPreviewPipRenderer.previewMatrix(content, layer.transform());
+        Vector3d center = layerPivot(layer);
+        double radius = 0.0D;
+        for (int x = 0; x <= 1; x++) {
+            for (int y = 0; y <= 1; y++) {
+                for (int z = 0; z <= 1; z++) {
+                    Vector3f corner = matrix.transformPosition(new Vector3f(
+                            (float) (x == 0 ? bounds.minX : bounds.maxX),
+                            (float) (y == 0 ? bounds.minY : bounds.maxY),
+                            (float) (z == 0 ? bounds.minZ : bounds.maxZ)));
+                    radius = Math.max(radius, new Vector3d(corner).distance(center));
+                }
+            }
+        }
+        return radius;
+    }
+
+    private static Vector3d selectionPivot(SceneDocument<Object> document, Collection<UUID> selection) {
+        Set<UUID> ids = Set.copyOf(selection);
+        Vector3d result = new Vector3d();
+        int count = 0;
+        for (SceneLayer<Object> layer : document.layers()) {
+            if (!ids.contains(layer.id())) continue;
+            result.add(layerPivot(layer));
+            count++;
+        }
+        return count == 0 ? result : result.div(count);
+    }
+
+    private static SceneDocument<Object> rotateSelectionAroundModelCenters(SceneDocument<Object> before,
+            Collection<UUID> selection, Vector3d groupPivot, Quaternionf delta) {
+        SceneDocument<Object> after = SelectionTransforms.rotate(before, selection, groupPivot, delta);
+        return correctModelCenters(before, after, selection, oldCenter -> {
+            Vector3d target = oldCenter.sub(groupPivot);
+            delta.transform(target);
+            return target.add(groupPivot);
+        });
+    }
+
+    private static SceneDocument<Object> scaleSelectionAroundModelCenters(SceneDocument<Object> before,
+            Collection<UUID> selection, Vector3d groupPivot, Vector3d factors) {
+        SceneDocument<Object> after = SelectionTransforms.scale(before, selection, groupPivot, factors);
+        return correctModelCenters(before, after, selection,
+                oldCenter -> oldCenter.sub(groupPivot).mul(factors).add(groupPivot));
+    }
+
+    private static SceneDocument<Object> correctModelCenters(SceneDocument<Object> before,
+            SceneDocument<Object> after, Collection<UUID> selection,
+            java.util.function.UnaryOperator<Vector3d> targetCenter) {
+        Set<UUID> ids = Set.copyOf(selection);
+        SceneDocument<Object> corrected = after;
+        for (SceneLayer<Object> oldLayer : before.layers()) {
+            if (!ids.contains(oldLayer.id())) continue;
+            SceneLayer<Object> current = corrected.layers().stream()
+                    .filter(layer -> layer.id().equals(oldLayer.id())).findFirst().orElseThrow();
+            Vector3d correction = targetCenter.apply(layerPivot(oldLayer)).sub(layerPivot(current));
+            if (correction.lengthSquared() > 1.0e-18D) {
+                corrected = SelectionTransforms.translate(corrected, Set.of(oldLayer.id()), correction);
+            }
+        }
+        return corrected;
     }
 
     private static float scaleComponent(Vector3f scale, GizmoHandle handle) {
@@ -1803,7 +1948,7 @@ public final class YuushyaEditorScreen extends Screen {
     }
 
     private Vector3d selectionPivot() {
-        return SelectionTransforms.pivot(draft, selectedLayerIds);
+        return selectionPivot(draft, selectedLayerIds);
     }
 
     private static EditorCameraState initialCamera(List<SceneLayer<Object>> layers, BlockPos worldOrigin) {

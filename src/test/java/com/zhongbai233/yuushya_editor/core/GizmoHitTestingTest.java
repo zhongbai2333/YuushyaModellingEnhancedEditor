@@ -1,6 +1,8 @@
 package com.zhongbai233.yuushya_editor.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.zhongbai233.scene_editor.core.camera.CameraMatrices;
@@ -11,6 +13,7 @@ import com.zhongbai233.scene_editor.core.gizmo.GizmoHitTesting;
 import com.zhongbai233.scene_editor.core.projection.ProjectedPoint;
 import com.zhongbai233.scene_editor.core.projection.EditorProjection;
 import com.zhongbai233.scene_editor.core.projection.EditorViewport;
+import com.zhongbai233.yuushya_editor.core.preview.ViewportGizmoHitTesting;
 import org.joml.Vector3d;
 import org.junit.jupiter.api.Test;
 
@@ -55,7 +58,7 @@ class GizmoHitTestingTest {
         Vector3d origin = new Vector3d();
         Vector3d ringPoint = GizmoHitTesting.ringPoint(origin, GizmoHandle.X, 1.05D, 0.65D);
         ProjectedPoint projectedRing = EditorProjection.project(ringPoint, matrices, viewport);
-        assertEquals(GizmoHandle.X, GizmoHitTesting.rotateHandleAt(
+        assertEquals(GizmoHandle.X, ViewportGizmoHitTesting.rotationHandleAt(
                 projectedRing.screenX(), projectedRing.screenY(), origin, matrices, viewport, 1.05D, 4.0D));
 
         for (GizmoHandle axis : new GizmoHandle[] {GizmoHandle.X, GizmoHandle.Y, GizmoHandle.Z}) {
@@ -88,5 +91,57 @@ class GizmoHitTestingTest {
             }
         }
         assertTrue(GizmoHitTesting.axisEndpoint(origin, GizmoHandle.X, -1.0D).x < 0.0D);
+    }
+
+    @Test
+    void scaleShaftsUseSegmentPickingInsteadOfEndpointOnlyPicking() {
+        EditorCameraState camera = EditorCameraState.lookingAt(EditorCameraMode.ORBIT,
+                new Vector3d(4.0D, 3.0D, 6.0D), new Vector3d(), new Vector3d(0.0D, 1.0D, 0.0D),
+                45.0F, 4.0F, 0.05F, 100.0F);
+        EditorViewport viewport = new EditorViewport(20, 30, 800, 600);
+        CameraMatrices matrices = CameraMatrices.create(camera, viewport);
+        Vector3d origin = new Vector3d();
+        double handleLength = 1.35D;
+
+        for (GizmoHandle axis : new GizmoHandle[] {GizmoHandle.X, GizmoHandle.Y, GizmoHandle.Z}) {
+            ProjectedPoint shaft = EditorProjection.project(
+                    GizmoHitTesting.axisEndpoint(origin, axis, handleLength * 0.55D), matrices, viewport);
+            assertEquals(axis, GizmoHitTesting.moveHandleAt(shaft.screenX(), shaft.screenY(), origin,
+                    matrices, viewport, handleLength, 6.0D));
+            assertEquals(GizmoHandle.NONE, GizmoHitTesting.scaleHandleAt(
+                    shaft.screenX(), shaft.screenY(), origin, matrices, viewport, handleLength, 6.0D));
+        }
+    }
+
+    @Test
+    void clippedAxisFragmentRemainsPickableWhenItsEndpointIsOutsideTheViewport() {
+        EditorCameraState camera = EditorCameraState.lookingAt(EditorCameraMode.ORBIT,
+                new Vector3d(0.0D, 0.0D, 10.0D), new Vector3d(), new Vector3d(0.0D, 1.0D, 0.0D),
+                45.0F, 4.0F, 0.05F, 100.0F);
+        EditorViewport viewport = new EditorViewport(20, 30, 240, 160);
+        CameraMatrices matrices = CameraMatrices.create(camera, viewport);
+        Vector3d origin = new Vector3d();
+        double axisLength = 20.0D;
+        ProjectedPoint endpoint = EditorProjection.project(
+                GizmoHitTesting.axisEndpoint(origin, GizmoHandle.X, axisLength), matrices, viewport);
+        assertFalse(endpoint.visible());
+
+        ProjectedPoint visibleFragment = null;
+        for (int tenth = 9; tenth >= 1; tenth--) {
+            ProjectedPoint candidate = EditorProjection.project(
+                    GizmoHitTesting.axisEndpoint(origin, GizmoHandle.X, axisLength * tenth / 10.0D),
+                    matrices, viewport);
+            if (candidate.visible()) {
+                visibleFragment = candidate;
+                break;
+            }
+        }
+        assertNotNull(visibleFragment);
+        assertEquals(GizmoHandle.NONE, GizmoHitTesting.moveHandleAt(
+                visibleFragment.screenX(), visibleFragment.screenY(), origin,
+                matrices, viewport, axisLength, 6.0D));
+        assertEquals(GizmoHandle.X, ViewportGizmoHitTesting.axisHandleAt(
+                visibleFragment.screenX(), visibleFragment.screenY(), origin,
+                matrices, viewport, axisLength, 6.0D));
     }
 }

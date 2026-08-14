@@ -4,6 +4,7 @@
   "package": "com.zhongbai233.yuushya_editor.mixin",
   "compatibilityLevel": "JAVA_25",
   "client": [
+    "CachedModeClientOverlayMixin",
     "ClientPacketListenerBlockUpdateMixin",
     "ItemBlockScreenAccessor",
     "ShowBlockScreenAccessor",

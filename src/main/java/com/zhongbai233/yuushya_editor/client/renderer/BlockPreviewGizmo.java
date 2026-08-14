@@ -7,12 +7,13 @@ import org.joml.Vector3d;
 import org.joml.Vector3dc;
 
 /** Immutable gizmo geometry submitted alongside one block-preview frame. */
-public record BlockPreviewGizmo(Vector3d origin, GizmoMode mode, GizmoHandle activeHandle,
+public record BlockPreviewGizmo(Vector3d origin, GizmoMode mode, GizmoHandle activeHandle, GizmoHandle hoveredHandle,
         double axisLength, double rotationRadius, double scaleHandleLength) {
     public BlockPreviewGizmo {
         origin = new Vector3d(Objects.requireNonNull(origin, "origin"));
         Objects.requireNonNull(mode, "mode");
         Objects.requireNonNull(activeHandle, "activeHandle");
+        Objects.requireNonNull(hoveredHandle, "hoveredHandle");
         if (!positiveFinite(axisLength) || !positiveFinite(rotationRadius)
                 || !positiveFinite(scaleHandleLength)) {
             throw new IllegalArgumentException("gizmo dimensions must be positive and finite");
@@ -21,7 +22,14 @@ public record BlockPreviewGizmo(Vector3d origin, GizmoMode mode, GizmoHandle act
 
     public BlockPreviewGizmo(Vector3dc origin, GizmoMode mode, GizmoHandle activeHandle,
             double axisLength, double rotationRadius, double scaleHandleLength) {
-        this(new Vector3d(origin), mode, activeHandle, axisLength, rotationRadius, scaleHandleLength);
+        this(new Vector3d(origin), mode, activeHandle, GizmoHandle.NONE,
+                axisLength, rotationRadius, scaleHandleLength);
+    }
+
+    public BlockPreviewGizmo(Vector3dc origin, GizmoMode mode, GizmoHandle activeHandle,
+            GizmoHandle hoveredHandle, double axisLength, double rotationRadius, double scaleHandleLength) {
+        this(new Vector3d(origin), mode, activeHandle, hoveredHandle,
+                axisLength, rotationRadius, scaleHandleLength);
     }
 
     @Override

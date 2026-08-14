@@ -12,6 +12,7 @@ import com.zhongbai233.scene_editor.core.gizmo.GizmoHandle;
 import com.zhongbai233.scene_editor.core.gizmo.GizmoHitTesting;
 import com.zhongbai233.scene_editor.core.projection.ProjectedPoint;
 import com.zhongbai233.scene_editor.core.projection.EditorProjection;
+import com.zhongbai233.yuushya_editor.core.EditorTransform;
 import com.zhongbai233.yuushya_editor.core.preview.BlockPreviewTransform;
 import com.zhongbai233.yuushya_editor.core.preview.CollisionShape;
 import java.util.HashMap;
@@ -29,9 +30,12 @@ import net.minecraft.client.renderer.feature.FeatureRenderDispatcher;
 import net.minecraft.client.renderer.item.ItemStackRenderState;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.texture.OverlayTexture;
+import net.minecraft.core.BlockPos;
 import net.minecraft.util.LightCoordsUtil;
+import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.item.ItemDisplayContext;
+import net.minecraft.world.phys.AABB;
 import org.joml.Matrix4f;
 import org.joml.Matrix4fc;
 import org.joml.Vector3d;
@@ -139,7 +143,7 @@ public final class BlockPreviewPipRenderer extends PictureInPictureRenderer<Bloc
         if (state.showGrid()) drawGrid(poseStack);
         drawModelingCellOutline(poseStack);
         drawCollisionShape(poseStack, state.collisionShape());
-        drawSelectionOutlines(poseStack, state);
+        drawInteractionOutlines(poseStack, state);
         if (state.gizmo() != null) drawGizmo(poseStack, state);
     }
 
@@ -183,16 +187,21 @@ public final class BlockPreviewPipRenderer extends PictureInPictureRenderer<Bloc
     }
 
     private static Matrix4f previewMatrix(BlockPreviewLayer layer) {
-        Matrix4f contentTransform = switch (layer.content()) {
-            case BlockPreviewLayer.BlockContent block -> block.centerOnPivot()
-                    ? BlockPreviewTransform.matrix(layer.transform())
-                    : BlockPreviewTransform.itemMatrix(layer.transform());
-            case BlockPreviewLayer.ItemContent _ -> BlockPreviewTransform.itemMatrix(layer.transform());
-            case BlockPreviewLayer.TextContent _ -> BlockPreviewTransform.textMatrix(layer.transform());
-        };
+        Matrix4f contentTransform = previewMatrix(layer.content(), layer.transform());
         Vector3d offset = layer.worldOffset();
         return new Matrix4f().translate((float) offset.x, (float) offset.y, (float) offset.z)
                 .mul(contentTransform);
+    }
+
+    /** Returns the exact content transform used by both rendering and viewport picking. */
+    public static Matrix4f previewMatrix(BlockPreviewLayer.Content content, EditorTransform transform) {
+        return switch (content) {
+            case BlockPreviewLayer.BlockContent block -> block.centerOnPivot()
+                    ? BlockPreviewTransform.matrix(transform)
+                    : BlockPreviewTransform.itemMatrix(transform);
+            case BlockPreviewLayer.ItemContent _ -> BlockPreviewTransform.itemMatrix(transform);
+            case BlockPreviewLayer.TextContent _ -> BlockPreviewTransform.textMatrix(transform);
+        };
     }
 
     private static void submitText(Minecraft minecraft, SubmitNodeStorage nodeStorage, PoseStack poseStack,
@@ -285,25 +294,64 @@ public final class BlockPreviewPipRenderer extends PictureInPictureRenderer<Bloc
                 0.5F, 0.5F, 0.5F, 0xB845E7FF, 1.25F);
     }
 
-    private void drawSelectionOutlines(PoseStack poseStack, BlockPreviewPipRenderState state) {
+    private void drawInteractionOutlines(PoseStack poseStack, BlockPreviewPipRenderState state) {
         VertexConsumer buffer = bufferSource.getBuffer(RenderTypes.linesTranslucent());
         for (BlockPreviewLayer layer : state.layers()) {
-            if (!layer.selected()) continue;
+            if (!layer.selected() && !layer.hovered()) continue;
+            int color = layer.selected()
+                    ? layer.hovered() ? 0xFFFFE9A3 : 0xF0FFD769
+                    : 0xC87EEBFF;
+            float width = layer.selected()
+                    ? layer.hovered() ? 1.95F : 1.65F
+                    : 1.30F;
+            float padding = layer.selected() ? 0.018F : 0.012F;
             poseStack.pushPose();
             poseStack.mulPose(previewMatrix(layer));
-            if (layer.content() instanceof BlockPreviewLayer.BlockContent) {
-                box(buffer, poseStack.last(), -0.018F, -0.018F, -0.018F,
-                        1.018F, 1.018F, 1.018F, 0xF0FFD769, 1.65F);
-            } else if (layer.content() instanceof BlockPreviewLayer.TextContent text) {
-                float width = Math.max(1.0F, Minecraft.getInstance().font.width(text.component()));
-                box(buffer, poseStack.last(), -0.18F, -0.18F, -0.08F,
-                        width + 0.18F, 9.18F, 0.08F, 0xF0FFD769, 1.65F);
-            } else {
-                box(buffer, poseStack.last(), -0.518F, -0.518F, -0.518F,
-                        0.518F, 0.518F, 0.518F, 0xF0FFD769, 1.65F);
-            }
+            AABB bounds = interactionBounds(layer.content());
+            float outlinePadding = layer.content() instanceof BlockPreviewLayer.TextContent ? 0.0F : padding;
+            box(buffer, poseStack.last(), (float) bounds.minX - outlinePadding,
+                    (float) bounds.minY - outlinePadding, (float) bounds.minZ - outlinePadding,
+                    (float) bounds.maxX + outlinePadding, (float) bounds.maxY + outlinePadding,
+                    (float) bounds.maxZ + outlinePadding, color, width);
             poseStack.popPose();
         }
+    }
+
+    /** Local bounds shared by selection outlines, picking, model-center pivots, and Gizmo sizing. */
+    public static AABB interactionBounds(BlockPreviewLayer.Content content) {
+        return switch (content) {
+            case BlockPreviewLayer.BlockContent block -> selectionBounds(block.blockState());
+            case BlockPreviewLayer.ItemContent _ -> new AABB(-0.5D, -0.5D, -0.5D,
+                    0.5D, 0.5D, 0.5D);
+            case BlockPreviewLayer.TextContent text -> {
+                double width = Math.max(1.0D, Minecraft.getInstance().font.width(text.component()));
+                yield new AABB(-0.18D, -0.18D, -0.08D, width + 0.18D, 9.18D, 0.08D);
+            }
+        };
+    }
+
+    /** Returns the enclosing box of the block's editor-visible outline shape. */
+    public static AABB selectionBounds(BlockState blockState) {
+        try {
+            AABB result = null;
+            for (AABB box : blockState.getShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO).toAabbs()) {
+                result = result == null ? box : new AABB(
+                        Math.min(result.minX, box.minX), Math.min(result.minY, box.minY),
+                        Math.min(result.minZ, box.minZ), Math.max(result.maxX, box.maxX),
+                        Math.max(result.maxY, box.maxY), Math.max(result.maxZ, box.maxZ));
+            }
+            if (result != null && validSelectionBounds(result)) return result;
+        } catch (RuntimeException ignored) {
+            // Some custom blocks require a real level to resolve their shape. Keep a visible
+            // unit-cube fallback instead of losing selection feedback for those blocks.
+        }
+        return new AABB(0.0D, 0.0D, 0.0D, 1.0D, 1.0D, 1.0D);
+    }
+
+    private static boolean validSelectionBounds(AABB box) {
+        return Double.isFinite(box.minX) && Double.isFinite(box.minY) && Double.isFinite(box.minZ)
+                && Double.isFinite(box.maxX) && Double.isFinite(box.maxY) && Double.isFinite(box.maxZ)
+                && box.maxX > box.minX && box.maxY > box.minY && box.maxZ > box.minZ;
     }
 
     private void drawCollisionShape(PoseStack poseStack, CollisionShape collisionShape) {
@@ -340,20 +388,24 @@ public final class BlockPreviewPipRenderer extends PictureInPictureRenderer<Bloc
 
     private static void drawMoveGizmo(VertexConsumer buffer, PoseStack.Pose pose, BlockPreviewGizmo gizmo) {
         float length = (float) gizmo.axisLength();
-        drawMoveAxis(buffer, pose, 'x', length, gizmo.activeHandle() == GizmoHandle.X,
+        drawMoveAxis(buffer, pose, 'x', length, handleState(gizmo, GizmoHandle.X),
                 0xFFE65A46, 0xFFFF9B91);
-        drawMoveAxis(buffer, pose, 'y', length, gizmo.activeHandle() == GizmoHandle.Y,
+        drawMoveAxis(buffer, pose, 'y', length, handleState(gizmo, GizmoHandle.Y),
                 0xFFA0DC5A, 0xFFCAFF9F);
-        drawMoveAxis(buffer, pose, 'z', length, gizmo.activeHandle() == GizmoHandle.Z,
+        drawMoveAxis(buffer, pose, 'z', length, handleState(gizmo, GizmoHandle.Z),
                 0xFF5AB4DC, 0xFF9DD9FF);
         box(buffer, pose, -0.045F, -0.045F, -0.045F, 0.045F, 0.045F, 0.045F,
                 0xFFE8E8E8, 1.2F);
     }
 
     private static void drawMoveAxis(VertexConsumer buffer, PoseStack.Pose pose, char axis, float length,
-            boolean selected, int color, int selectedColor) {
-        int visibleColor = selected ? selectedColor : color;
-        float width = selected ? 2.4F : 1.5F;
+            HandleState state, int color, int selectedColor) {
+        int visibleColor = state == HandleState.IDLE ? color : selectedColor;
+        float width = switch (state) {
+            case IDLE -> 1.5F;
+            case HOVERED -> 2.0F;
+            case ACTIVE -> 2.4F;
+        };
         float arrowLength = length * 0.10F;
         float wing = length * 0.052F;
         Vector3d direction = switch (axis) {
@@ -379,17 +431,21 @@ public final class BlockPreviewPipRenderer extends PictureInPictureRenderer<Bloc
 
     private static void drawRotateGizmo(VertexConsumer buffer, PoseStack.Pose pose, BlockPreviewGizmo gizmo) {
         drawRing(buffer, pose, GizmoHandle.X, (float) gizmo.rotationRadius(),
-                gizmo.activeHandle() == GizmoHandle.X, 0xFFE65A46, 0xFFFF9B91);
+                handleState(gizmo, GizmoHandle.X), 0xFFE65A46, 0xFFFF9B91);
         drawRing(buffer, pose, GizmoHandle.Y, (float) gizmo.rotationRadius(),
-                gizmo.activeHandle() == GizmoHandle.Y, 0xFFA0DC5A, 0xFFCAFF9F);
+                handleState(gizmo, GizmoHandle.Y), 0xFFA0DC5A, 0xFFCAFF9F);
         drawRing(buffer, pose, GizmoHandle.Z, (float) gizmo.rotationRadius(),
-                gizmo.activeHandle() == GizmoHandle.Z, 0xFF5AB4DC, 0xFF9DD9FF);
+                handleState(gizmo, GizmoHandle.Z), 0xFF5AB4DC, 0xFF9DD9FF);
     }
 
     private static void drawRing(VertexConsumer buffer, PoseStack.Pose pose, GizmoHandle axis, float radius,
-            boolean selected, int color, int selectedColor) {
-        int visibleColor = selected ? selectedColor : color;
-        float width = selected ? 2.2F : 1.2F;
+            HandleState state, int color, int selectedColor) {
+        int visibleColor = state == HandleState.IDLE ? color : selectedColor;
+        float width = switch (state) {
+            case IDLE -> 1.2F;
+            case HOVERED -> 1.8F;
+            case ACTIVE -> 2.2F;
+        };
         Vector3d previous = GizmoHitTesting.ringPoint(new Vector3d(), axis, radius, 0.0D);
         for (int segment = 1; segment <= GIZMO_RING_SEGMENTS; segment++) {
             double angle = Math.PI * 2.0D * segment / GIZMO_RING_SEGMENTS;
@@ -417,38 +473,46 @@ public final class BlockPreviewPipRenderer extends PictureInPictureRenderer<Bloc
     }
 
     private static void drawScaleGizmo(VertexConsumer buffer, PoseStack.Pose pose,
-            BlockPreviewPipRenderState state, BlockPreviewGizmo gizmo) {
+            BlockPreviewPipRenderState renderState, BlockPreviewGizmo gizmo) {
         for (GizmoHandle axis : new GizmoHandle[] {GizmoHandle.X, GizmoHandle.Y, GizmoHandle.Z}) {
-            boolean selected = gizmo.activeHandle() == axis;
+            HandleState interaction = handleState(gizmo, axis);
             int color = switch (axis) {
-                case X -> selected ? 0xFFFF9B91 : 0xFFE65A46;
-                case Y -> selected ? 0xFFCAFF9F : 0xFFA0DC5A;
-                case Z -> selected ? 0xFF9DD9FF : 0xFF5AB4DC;
+                case X -> interaction == HandleState.IDLE ? 0xFFE65A46 : 0xFFFF9B91;
+                case Y -> interaction == HandleState.IDLE ? 0xFFA0DC5A : 0xFFCAFF9F;
+                case Z -> interaction == HandleState.IDLE ? 0xFF5AB4DC : 0xFF9DD9FF;
                 default -> throw new IllegalStateException("Unexpected scale axis " + axis);
             };
-            float width = selected ? 2.4F : 1.5F;
+            float width = switch (interaction) {
+                case IDLE -> 1.5F;
+                case HOVERED -> 2.0F;
+                case ACTIVE -> 2.4F;
+            };
             Vector3d negative = new Vector3d(axis.axis()).mul(-gizmo.scaleHandleLength());
             Vector3d positive = new Vector3d(axis.axis()).mul(gizmo.scaleHandleLength());
             line(buffer, pose, negative, positive, color, width);
-            drawScaleMarker(buffer, pose, state, gizmo, negative, selected, color, width);
-            drawScaleMarker(buffer, pose, state, gizmo, positive, selected, color, width);
+            drawScaleMarker(buffer, pose, renderState, interaction, gizmo, negative, color, width);
+            drawScaleMarker(buffer, pose, renderState, interaction, gizmo, positive, color, width);
         }
         box(buffer, pose, -0.055F, -0.055F, -0.055F, 0.055F, 0.055F, 0.055F,
                 0xFFE8E8E8, 1.2F);
     }
 
     private static void drawScaleMarker(VertexConsumer buffer, PoseStack.Pose pose,
-            BlockPreviewPipRenderState state, BlockPreviewGizmo gizmo, Vector3d localEndpoint,
-            boolean selected, int color, float width) {
+            BlockPreviewPipRenderState renderState, HandleState handleState,
+            BlockPreviewGizmo gizmo, Vector3d localEndpoint, int color, float width) {
         Vector3d endpoint = new Vector3d(gizmo.origin()).add(localEndpoint);
-        ProjectedPoint projected = EditorProjection.project(endpoint, state.cameraFrame().matrices(),
-                state.cameraFrame().viewport());
+        ProjectedPoint projected = EditorProjection.project(endpoint, renderState.cameraFrame().matrices(),
+                renderState.cameraFrame().viewport());
         if (!projected.visible()) return;
-        double radius = selected ? 4.5D : 3.5D;
-        Vector3d top = markerPoint(projected, 0.0D, -radius, state).sub(gizmo.origin());
-        Vector3d right = markerPoint(projected, radius, 0.0D, state).sub(gizmo.origin());
-        Vector3d bottom = markerPoint(projected, 0.0D, radius, state).sub(gizmo.origin());
-        Vector3d left = markerPoint(projected, -radius, 0.0D, state).sub(gizmo.origin());
+        double radius = switch (handleState) {
+            case IDLE -> 3.5D;
+            case HOVERED -> 4.1D;
+            case ACTIVE -> 4.5D;
+        };
+        Vector3d top = markerPoint(projected, 0.0D, -radius, renderState).sub(gizmo.origin());
+        Vector3d right = markerPoint(projected, radius, 0.0D, renderState).sub(gizmo.origin());
+        Vector3d bottom = markerPoint(projected, 0.0D, radius, renderState).sub(gizmo.origin());
+        Vector3d left = markerPoint(projected, -radius, 0.0D, renderState).sub(gizmo.origin());
         line(buffer, pose, top, right, color, width);
         line(buffer, pose, right, bottom, color, width);
         line(buffer, pose, bottom, left, color, width);
@@ -459,6 +523,16 @@ public final class BlockPreviewPipRenderer extends PictureInPictureRenderer<Bloc
             BlockPreviewPipRenderState state) {
         return EditorProjection.worldPointAtScreenDepth(center.screenX() + offsetX, center.screenY() + offsetY,
                 center.depth(), state.cameraFrame().matrices(), state.cameraFrame().viewport());
+    }
+
+    private static HandleState handleState(BlockPreviewGizmo gizmo, GizmoHandle axis) {
+        if (gizmo.activeHandle() == axis) return HandleState.ACTIVE;
+        if (gizmo.hoveredHandle() == axis) return HandleState.HOVERED;
+        return HandleState.IDLE;
+    }
+
+    private enum HandleState {
+        IDLE, HOVERED, ACTIVE
     }
 
     private static void box(VertexConsumer buffer, PoseStack.Pose pose, float minX, float minY, float minZ,
@@ -488,9 +562,28 @@ public final class BlockPreviewPipRenderer extends PictureInPictureRenderer<Bloc
         // Keep camera-distance compensation while preventing the thinnest tier from
         // collapsing into a Retina hairline.
         float visibleWidth = LineWidthPolicy.visibleWidth(width, ACTIVE_LINE_WIDTH_SCALE.get());
-        buffer.addVertex(pose, x1, y1, z1).setColor(color).setNormal(0.0F, 1.0F, 0.0F)
+        float dx = x2 - x1;
+        float dy = y2 - y1;
+        float dz = z2 - z1;
+        float lengthSquared = dx * dx + dy * dy + dz * dz;
+        float directionX;
+        float directionY;
+        float directionZ;
+        if (lengthSquared > 1.0e-12F) {
+            float inverseLength = 1.0F / (float) Math.sqrt(lengthSquared);
+            directionX = dx * inverseLength;
+            directionY = dy * inverseLength;
+            directionZ = dz * inverseLength;
+        } else {
+            directionX = 0.0F;
+            directionY = 1.0F;
+            directionZ = 0.0F;
+        }
+        buffer.addVertex(pose, x1, y1, z1).setColor(color)
+                .setNormal(pose, directionX, directionY, directionZ)
                 .setLineWidth(visibleWidth);
-        buffer.addVertex(pose, x2, y2, z2).setColor(color).setNormal(0.0F, 1.0F, 0.0F)
+        buffer.addVertex(pose, x2, y2, z2).setColor(color)
+                .setNormal(pose, directionX, directionY, directionZ)
                 .setLineWidth(visibleWidth);
     }
 

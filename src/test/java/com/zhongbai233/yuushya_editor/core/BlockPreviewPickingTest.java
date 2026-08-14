@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.zhongbai233.yuushya_editor.core.preview.BlockPreviewPicking;
+import com.zhongbai233.yuushya_editor.core.preview.BlockPreviewTransform;
 import com.zhongbai233.scene_editor.core.projection.PickingRay;
 import java.util.OptionalDouble;
 import org.joml.Quaternionf;
@@ -37,5 +38,19 @@ class BlockPreviewPickingTest {
 
         assertTrue(BlockPreviewPicking.hitDistance(ray, wide).isPresent());
         assertEquals(OptionalDouble.empty(), BlockPreviewPicking.hitDistance(ray, unit));
+    }
+
+    @Test
+    void textPickingUsesTheRenderedTextPlaneInsteadOfAUnitCube() {
+        var textMatrix = BlockPreviewTransform.textMatrix(EditorTransform.IDENTITY);
+        PickingRay throughVisibleText = new PickingRay(new Vector3d(2.5D, 0.05D, 3.0D),
+                new Vector3d(0.0D, 0.0D, -1.0D));
+        PickingRay beyondTextWidth = new PickingRay(new Vector3d(5.7D, 0.05D, 3.0D),
+                new Vector3d(0.0D, 0.0D, -1.0D));
+
+        assertTrue(BlockPreviewPicking.hitDistance(throughVisibleText, textMatrix,
+                0.0D, 0.0D, -0.08D, 60.0D, 9.0D, 0.08D).isPresent());
+        assertEquals(OptionalDouble.empty(), BlockPreviewPicking.hitDistance(beyondTextWidth, textMatrix,
+                0.0D, 0.0D, -0.08D, 60.0D, 9.0D, 0.08D));
     }
 }

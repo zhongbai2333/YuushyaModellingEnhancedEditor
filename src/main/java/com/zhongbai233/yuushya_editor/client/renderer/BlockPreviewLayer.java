@@ -9,7 +9,7 @@ import org.joml.Vector3d;
 import org.joml.Vector3dc;
 
 /** Immutable Minecraft-facing block/item/text layer consumed by the shared PIP renderer. */
-public record BlockPreviewLayer(Content content, EditorTransform transform, boolean selected,
+public record BlockPreviewLayer(Content content, EditorTransform transform, boolean selected, boolean hovered,
         Vector3d worldOffset) {
     public BlockPreviewLayer {
         Objects.requireNonNull(content, "content");
@@ -18,7 +18,7 @@ public record BlockPreviewLayer(Content content, EditorTransform transform, bool
     }
 
     public BlockPreviewLayer(Content content, EditorTransform transform, boolean selected) {
-        this(content, transform, selected, new Vector3d());
+        this(content, transform, selected, false, new Vector3d());
     }
 
     public BlockPreviewLayer(BlockState blockState, EditorTransform transform, boolean selected) {
@@ -26,7 +26,12 @@ public record BlockPreviewLayer(Content content, EditorTransform transform, bool
     }
 
     public BlockPreviewLayer(Content content, EditorTransform transform, boolean selected, Vector3dc worldOffset) {
-        this(content, transform, selected, new Vector3d(worldOffset));
+        this(content, transform, selected, false, new Vector3d(worldOffset));
+    }
+
+    public BlockPreviewLayer(Content content, EditorTransform transform, boolean selected,
+            boolean hovered, Vector3dc worldOffset) {
+        this(content, transform, selected, hovered, new Vector3d(worldOffset));
     }
 
     @Override
