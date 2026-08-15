@@ -16,6 +16,7 @@ import com.zhongbai233.yuushya_editor.client.environment.EnvironmentModeledBlock
 import com.zhongbai233.yuushya_editor.client.widget.BlackGoldButton;
 import com.zhongbai233.yuushya_editor.client.widget.BlackGoldToolButton;
 import com.zhongbai233.yuushya_editor.client.widget.BlackGoldUi;
+import com.zhongbai233.yuushya_editor.core.EditorType;
 import com.zhongbai233.yuushya_editor.core.EditorTransform;
 import com.zhongbai233.yuushya_editor.core.ItemModelData;
 import com.zhongbai233.scene_editor.core.selection.MultiSelectionPolicy;
@@ -244,6 +245,12 @@ public final class YuushyaEditorScreen extends Screen {
                 Math.max(32, leftWidth - addWidth - 20), 20,
                 Component.translatable("screen.yuushya_modelling_enhanced_editor.delete"),
                 button -> removeSelectedLayer(), 0xFFD04040));
+        if (supportsInventoryPicker()) {
+            addRenderableWidget(new BlackGoldButton(8, height - 124, leftWidth - 16, 20,
+                    Component.translatable(
+                            "screen.yuushya_modelling_enhanced_editor.add_from_inventory"),
+                    button -> openInventoryPicker(), BlackGoldUi.CYAN));
+        }
         int halfLeft = Math.max(32, (leftWidth - 20) / 2);
         addRenderableWidget(new BlackGoldButton(8, height - 76, halfLeft, 20,
                 Component.translatable("screen.yuushya_modelling_enhanced_editor.copy_layer"),
@@ -1035,6 +1042,27 @@ public final class YuushyaEditorScreen extends Screen {
         }
     }
 
+    private void openInventoryPicker() {
+        if (!supportsInventoryPicker() || !commitInspector("numeric transform")) return;
+        minecraft.setScreen(new InventoryItemPickerScreen(this, host.editorType(),
+                this::addInventoryItem));
+    }
+
+    private void addInventoryItem(ItemStack stack) {
+        switch (host.editorType()) {
+            case BLOCK -> {
+                BlockState blockState = YuushyaItemModelSupport.resolveBlockState(stack);
+                if (blockState != null) addBlock(blockState);
+            }
+            case ITEM -> addItem(stack);
+            case TEXT -> { }
+        }
+    }
+
+    private boolean supportsInventoryPicker() {
+        return host.editorType() != EditorType.TEXT;
+    }
+
     private void addBlock(BlockState blockState) {
         Objects.requireNonNull(blockState, "blockState");
         UUID id = UUID.randomUUID();
@@ -1562,7 +1590,8 @@ public final class YuushyaEditorScreen extends Screen {
     }
 
     private int visibleLayerRows() {
-        return Math.max(1, (height - layerRowY() - 110) / layerRowStep());
+        int controlsHeight = supportsInventoryPicker() ? 134 : 110;
+        return Math.max(1, (height - layerRowY() - controlsHeight) / layerRowStep());
     }
 
     private boolean compactLayout() {

@@ -321,8 +321,7 @@ public final class BlockPreviewPipRenderer extends PictureInPictureRenderer<Bloc
     public static AABB interactionBounds(BlockPreviewLayer.Content content) {
         return switch (content) {
             case BlockPreviewLayer.BlockContent block -> selectionBounds(block.blockState());
-            case BlockPreviewLayer.ItemContent _ -> new AABB(-0.5D, -0.5D, -0.5D,
-                    0.5D, 0.5D, 0.5D);
+            case BlockPreviewLayer.ItemContent item -> ItemPreviewBounds.resolve(item.itemStack());
             case BlockPreviewLayer.TextContent text -> {
                 double width = Math.max(1.0D, Minecraft.getInstance().font.width(text.component()));
                 yield new AABB(-0.18D, -0.18D, -0.08D, width + 0.18D, 9.18D, 0.08D);
