@@ -1424,14 +1424,20 @@ public final class YuushyaEditorScreen extends Screen {
 
     private void undo() {
         draft = history.undo(draft);
-        reconcileSelection();
-        syncInspector();
+        refreshAfterHistoryNavigation();
     }
 
     private void redo() {
         draft = history.redo(draft);
+        refreshAfterHistoryNavigation();
+    }
+
+    private void refreshAfterHistoryNavigation() {
         reconcileSelection();
-        syncInspector();
+        int maxScroll = Math.max(0, draft.layers().size() - visibleLayerRows());
+        layerScroll = Math.clamp(layerScroll, 0, maxScroll);
+        ensureSelectedLayerVisible();
+        rebuildWidgets();
     }
 
     private void requestSave(Runnable onSuccess) {

@@ -354,6 +354,11 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                 YuushyaEditorScreen screen = requireEnhancedScreen(context);
                 verifySelectionInteractions(screen);
                 selectionInteractionsVerified = true;
+                verifyRotateAndScaleGizmos(screen);
+                // History navigation rebuilds the editor widgets so hierarchy rows,
+                // scrolling and inspector values all reflect the restored document.
+                // Bind semantic names only after those interactions, otherwise the
+                // GUI session would retain references to widgets that no longer exist.
                 guiSession = context.automation().beginGuiSession(YuushyaEditorScreen.class);
                 transformBoxes = transformBoxes(screen);
                 guiSession.name(transformBoxes[6], "scale-x");
@@ -361,7 +366,6 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                 guiSession.name(transformBoxes[8], "scale-z");
                 guiSession.name(collisionShapeButton(screen), "collision-shape");
                 guiSnapshot = guiSession.snapshot();
-                verifyRotateAndScaleGizmos(screen);
                 verifySnapshot(guiSession.snapshot());
                 gizmoInteractionsVerified = true;
                 return BenchClientStepResult.CONTINUE;
@@ -1420,6 +1424,17 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
             invokePrivate(screen, "undo", new Class<?>[0]);
             if (!draft(screen).equals(before)) {
                 throw new AssertionError("Undo did not exactly restore the document after layer paste");
+            }
+            boolean staleCopyRow = screen.children().stream()
+                    .filter(AbstractWidget.class::isInstance)
+                    .map(AbstractWidget.class::cast)
+                    .anyMatch(widget -> widget.getMessage().getString().contains(copy.name()));
+            boolean restoredSourceRow = screen.children().stream()
+                    .filter(AbstractWidget.class::isInstance)
+                    .map(AbstractWidget.class::cast)
+                    .anyMatch(widget -> widget.getMessage().getString().contains(source.name()));
+            if (staleCopyRow || !restoredSourceRow) {
+                throw new AssertionError("Undo did not refresh the hierarchy rows and scroll position");
             }
         }
 
