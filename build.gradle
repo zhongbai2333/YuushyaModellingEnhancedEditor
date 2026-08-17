@@ -245,6 +245,10 @@ def verifyYuushyaRuntime = tasks.register('verifyYuushyaRuntime') {
             'com/yuushya/modelling/gui/textblock/TextBlockScreen.class',
             'com/yuushya/modelling/block/blockstate/YuushyaBlockStates.class',
             'com/yuushya/modelling/blockentity/BlockShape.class',
+            'com/yuushya/modelling/blockentity/AbstractTransformBlockEntity.class',
+            'com/yuushya/modelling/registries/DataComponentRegistry.class',
+            'com/yuushya/modelling/registries/ItemRegistry.class',
+            'com/yuushya/modelling/utils/VoxelShapeSerializer.class',
             'com/yuushya/modelling/blockentity/transformData/TransformBlockData.class',
             'com/yuushya/modelling/blockentity/transformData/TransformType.class',
             'com/yuushya/modelling/network/TransformDataOncePacket.class',
@@ -300,6 +304,7 @@ if (modBenchEnabled) {
             'artifacts/screenshots/yuushya-editor-item-picker.png',
             'artifacts/screenshots/yuushya-editor-item-settings.png',
             'artifacts/screenshots/yuushya-editor-text-editor.png',
+            'artifacts/screenshots/yuushya-editor-custom-collision.png',
             'artifacts/screenshots/yuushya-editor-far-line-width.png',
             'artifacts/gui/yuushya-editor-axis-scale-control.png',
             'artifacts/custom/yuushya-editor-gui.txt',
@@ -336,6 +341,9 @@ def verifyProductionJar = tasks.register('verifyProductionJar') {
         new java.util.zip.ZipFile(archiveFile).withCloseable { archive ->
             List<String> requiredEditorEntries = [
                 'com/zhongbai233/yuushya_editor/client/BlockStateEditorScreen.class',
+                'com/zhongbai233/yuushya_editor/client/CollisionShapeEditorScreen.class',
+                'com/zhongbai233/yuushya_editor/client/ShapeToolPickerScreen.class',
+                'com/zhongbai233/yuushya_editor/compat/YuushyaShapeToolBridge.class',
                 'com/zhongbai233/yuushya_editor/core/BlockStatePropertySupport.class'
             ]
             List<String> missingEditorEntries = requiredEditorEntries.findAll {

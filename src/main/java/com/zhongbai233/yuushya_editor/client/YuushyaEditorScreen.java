@@ -4,6 +4,7 @@ import com.mojang.blaze3d.platform.Window;
 import com.zhongbai233.yuushya_editor.compat.YuushyaEditorHost;
 import com.zhongbai233.yuushya_editor.compat.YuushyaItemModelSupport;
 import com.zhongbai233.yuushya_editor.compat.YuushyaScalePolicy;
+import com.zhongbai233.yuushya_editor.compat.YuushyaShapeToolBridge;
 import com.zhongbai233.yuushya_editor.compat.YuushyaTransformConversion;
 import com.zhongbai233.yuushya_editor.client.renderer.BlockPreviewLayer;
 import com.zhongbai233.yuushya_editor.client.renderer.BlockPreviewGizmo;
@@ -129,6 +130,7 @@ public final class YuushyaEditorScreen extends Screen {
     private EditorCameraState camera;
     private BlackGoldButton visibilityButton;
     private BlackGoldButton collisionShapeButton;
+    private BlackGoldButton collisionEditButton;
     private BlackGoldButton contentButton;
     private int layerScroll;
     private boolean draggingViewport;
@@ -155,6 +157,7 @@ public final class YuushyaEditorScreen extends Screen {
     private boolean statusError;
     private boolean layerClickShiftDown;
     private boolean layerClickControlDown;
+    private int shapeToolInventorySlot = -1;
 
     public YuushyaEditorScreen(YuushyaEditorHost<Object> host, Screen originalScreen) {
         super(Component.translatable("screen.yuushya_modelling_enhanced_editor.title"));
@@ -216,11 +219,15 @@ public final class YuushyaEditorScreen extends Screen {
         int inspectorFullWidth = Math.max(48, rightWidth - 24);
         int collisionButtonX = compactLayout() ? rightX + 12 : rightX + 12;
         int collisionButtonY = compactLayout() ? 4 : inspectorActionY + 24;
-        int collisionButtonWidth = compactLayout() ? 28 : inspectorFullWidth;
+        int collisionButtonWidth = compactLayout() ? 28 : Math.max(24, inspectorFullWidth - 26);
         collisionShapeButton = addRenderableWidget(new BlackGoldButton(collisionButtonX, collisionButtonY,
                 collisionButtonWidth, 20, Component.empty(), button -> cycleCollisionShape(), GOLD_DIM));
+        collisionEditButton = addRenderableWidget(new BlackGoldButton(
+                collisionButtonX + collisionButtonWidth + 4, collisionButtonY, 22, 20,
+                Component.literal("✎"), button -> openCollisionEditor(), BlackGoldUi.CYAN));
         contentButton = addRenderableWidget(new BlackGoldButton(collisionButtonX, collisionButtonY + 24,
-                collisionButtonWidth, 20, Component.empty(), button -> editSelectedContent(),
+                compactLayout() ? collisionButtonWidth : inspectorFullWidth, 20,
+                Component.empty(), button -> editSelectedContent(),
                 BlackGoldUi.CYAN));
 
         int visibleRows = visibleLayerRows();
@@ -650,7 +657,7 @@ public final class YuushyaEditorScreen extends Screen {
         return cachedPreviewLayers;
     }
 
-    private static BlockPreviewLayer.Content previewContent(Object hostData) {
+    static BlockPreviewLayer.Content previewContent(Object hostData) {
         if (hostData instanceof BlockState blockState) {
             return new BlockPreviewLayer.BlockContent(blockState);
         }
@@ -1414,12 +1421,36 @@ public final class YuushyaEditorScreen extends Screen {
     private void cycleCollisionShape() {
         if (!commitInspector("numeric transform")) return;
         CollisionShape.Kind next = draft.collisionShape().kind().nextEditablePreset();
+        if (host.editorType() != EditorType.BLOCK && next == CollisionShape.Kind.CUSTOM) {
+            next = CollisionShape.Kind.NONE;
+        }
         SceneDocument<Object> before = draft;
         SceneDocument<Object> after = draft.withCollisionShape(CollisionShape.forKind(next));
         draft = history.execute(before, new SnapshotCommand(before, after, "collision shape"));
         syncInspector();
         setStatus(Component.translatable("screen.yuushya_modelling_enhanced_editor.status.collision",
                 Component.translatable(next.translationKey())), false);
+    }
+
+    private void openCollisionEditor() {
+        if (host.editorType() != EditorType.BLOCK
+                || draft.collisionShape().kind() != CollisionShape.Kind.CUSTOM) return;
+        if (!commitInspector("numeric transform")) return;
+        minecraft.setScreen(new CollisionShapeEditorScreen(this, draft.layers(),
+                draft.collisionShape(), shapeToolInventorySlot, host.worldOrigin().orElseThrow(),
+                (shape, toolSlot) -> {
+                    shapeToolInventorySlot = toolSlot;
+                    SceneDocument<Object> before = draft;
+                    SceneDocument<Object> after = draft.withCollisionShape(shape);
+                    if (!after.equals(before)) {
+                        draft = history.execute(before,
+                                new SnapshotCommand(before, after, "custom collision shape"));
+                    }
+                    syncInspector();
+                    setStatus(Component.translatable(
+                            "screen.yuushya_modelling_enhanced_editor.status.custom_collision",
+                            shape.boxes().size()), false);
+                }));
     }
 
     private void undo() {
@@ -1479,6 +1510,20 @@ public final class YuushyaEditorScreen extends Screen {
 
     private boolean submitDraft() {
         try {
+            boolean customShapeChanged = draft.collisionShape().kind() == CollisionShape.Kind.CUSTOM
+                    && !draft.collisionShape().equals(original.collisionShape());
+            if (customShapeChanged) {
+                if (host.editorType() != EditorType.BLOCK || host.worldOrigin().isEmpty()) {
+                    throw new IllegalStateException(Component.translatable(
+                            "screen.yuushya_modelling_enhanced_editor.error.custom_collision_target").getString());
+                }
+                if (!validSelectedShapeTool()) {
+                    throw new IllegalStateException(Component.translatable(
+                            "screen.yuushya_modelling_enhanced_editor.error.shape_tool_required").getString());
+                }
+                YuushyaShapeToolBridge.apply(shapeToolInventorySlot,
+                        draft.collisionShape(), host.worldOrigin().orElseThrow());
+            }
             host.submit(original, draft);
             return true;
         } catch (RuntimeException exception) {
@@ -1660,6 +1705,11 @@ public final class YuushyaEditorScreen extends Screen {
                     ? "screen.yuushya_modelling_enhanced_editor.collision_short"
                     : "screen.yuushya_modelling_enhanced_editor.collision",
                     Component.translatable(draft.collisionShape().kind().translationKey())));
+        }
+        if (collisionEditButton != null) {
+            collisionEditButton.visible = host.editorType() == EditorType.BLOCK
+                    && draft.collisionShape().kind() == CollisionShape.Kind.CUSTOM;
+            collisionEditButton.active = collisionEditButton.visible;
         }
         if (contentButton != null) {
             contentButton.active = active && selected != null
@@ -2015,6 +2065,13 @@ public final class YuushyaEditorScreen extends Screen {
 
     private void setStatus(String message, boolean error) {
         setStatus(message == null ? Component.empty() : Component.literal(message), error);
+    }
+
+    private boolean validSelectedShapeTool() {
+        return minecraft != null && minecraft.player != null && minecraft.player.isCreative()
+                && shapeToolInventorySlot >= 0 && shapeToolInventorySlot < 36
+                && YuushyaShapeToolBridge.isShapeTool(
+                        minecraft.player.getInventory().getItem(shapeToolInventorySlot));
     }
 
     private void setStatus(Component message, boolean error) {

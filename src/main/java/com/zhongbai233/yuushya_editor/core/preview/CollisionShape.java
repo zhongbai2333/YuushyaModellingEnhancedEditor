@@ -58,19 +58,14 @@ public record CollisionShape(Kind kind, List<Box> boxes) {
         BLOCK,
         CUSTOM;
 
-        /**
-         * Returns the next collision shape that Yuushya 2.4.2 can actually select
-         * through its packet protocol. CUSTOM is a host placeholder (and is empty
-         * in the audited release), so normal editing must not manufacture it.
-         * Existing CUSTOM documents remain readable and can move back to NONE.
-         */
         public Kind nextEditablePreset() {
             return switch (this) {
                 case NONE -> FENCE;
                 case FENCE -> BOTTOM_HALF;
                 case BOTTOM_HALF -> TOP_HALF;
                 case TOP_HALF -> BLOCK;
-                case BLOCK, CUSTOM -> NONE;
+                case BLOCK -> CUSTOM;
+                case CUSTOM -> NONE;
             };
         }
 

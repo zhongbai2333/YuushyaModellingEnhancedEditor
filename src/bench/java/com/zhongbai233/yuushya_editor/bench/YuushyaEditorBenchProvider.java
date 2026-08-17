@@ -14,6 +14,7 @@ import com.yuushya.modelling.gui.itemblock.ItemBlockScreen;
 import com.yuushya.modelling.gui.textblock.TextBlockScreen;
 import com.yuushya.modelling.registries.BlockRegistry;
 import com.yuushya.modelling.registries.DataComponentRegistry;
+import com.yuushya.modelling.registries.ItemRegistry;
 import com.zhongbai233.bench.api.BenchApiVersion;
 import com.zhongbai233.bench.api.BenchCompatibility;
 import com.zhongbai233.bench.api.ScenarioDescriptor;
@@ -30,9 +31,12 @@ import com.zhongbai233.bench.api.neoforge.client.BenchGuiSession;
 import com.zhongbai233.yuushya_editor.client.YuushyaEditorScreen;
 import com.zhongbai233.yuushya_editor.client.BlockPickerScreen;
 import com.zhongbai233.yuushya_editor.client.BlockStateEditorScreen;
+import com.zhongbai233.yuushya_editor.client.CollisionShapeEditorScreen;
+import com.zhongbai233.yuushya_editor.client.CollisionAutoGenerator;
 import com.zhongbai233.yuushya_editor.client.ItemPickerScreen;
 import com.zhongbai233.yuushya_editor.client.ItemContentEditorScreen;
 import com.zhongbai233.yuushya_editor.client.TextContentEditorScreen;
+import com.zhongbai233.yuushya_editor.client.ShapeToolPickerScreen;
 import com.zhongbai233.yuushya_editor.client.ZFightWarningScreen;
 import com.zhongbai233.yuushya_editor.client.renderer.BlockPreviewPipRenderer;
 import com.zhongbai233.scene_editor.core.render.LineWidthPolicy;
@@ -41,6 +45,7 @@ import com.zhongbai233.yuushya_editor.client.environment.EnvironmentPreviewManag
 import com.zhongbai233.yuushya_editor.client.widget.BlackGoldButton;
 import com.zhongbai233.yuushya_editor.compat.YuushyaTransformConversion;
 import com.zhongbai233.yuushya_editor.compat.YuushyaEditorHost;
+import com.zhongbai233.yuushya_editor.compat.YuushyaShapeToolBridge;
 import com.zhongbai233.yuushya_editor.core.EditorTransform;
 import com.zhongbai233.yuushya_editor.core.EditorType;
 import com.zhongbai233.yuushya_editor.core.ItemModelData;
@@ -84,11 +89,13 @@ import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.input.MouseButtonInfo;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.network.protocol.game.ServerboundClientCommandPacket;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.GameType;
@@ -99,6 +106,9 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.Shapes;
+import net.minecraft.world.phys.shapes.VoxelShape;
 import org.joml.Vector3d;
 import org.joml.Vector3f;
 import org.joml.Quaternionf;
@@ -147,6 +157,16 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
         private static final BlockPos ITEM_FIXTURE_OFFSET = new BlockPos(5, 0, 0);
         private static final BlockPos TEXT_FIXTURE_OFFSET = new BlockPos(7, 0, 0);
         private static final BlockPos SHOW_FIXTURE_OFFSET = new BlockPos(-5, 0, 0);
+        // Exact concave inner-left stair shape observed in the development world's
+        // CustomShape data. Its asymmetric three-box layout also exposes facing errors.
+        private static final List<CollisionShape.Box> EDITOR_CUSTOM_BOXES = List.of(
+                new CollisionShape.Box(0.0D, 0.0D, 0.0D, 1.0D, 0.5D, 1.0D),
+                new CollisionShape.Box(0.0D, 0.5D, 0.0D, 0.5D, 1.0D, 1.0D),
+                new CollisionShape.Box(0.5D, 0.5D, 0.0D, 1.0D, 1.0D, 0.5D));
+        private static final List<CollisionShape.Box> NORTH_WORLD_CUSTOM_BOXES = List.of(
+                new CollisionShape.Box(0.0D, 0.0D, 0.0D, 1.0D, 0.5D, 1.0D),
+                new CollisionShape.Box(0.5D, 0.5D, 0.0D, 1.0D, 1.0D, 1.0D),
+                new CollisionShape.Box(0.0D, 0.5D, 0.5D, 0.5D, 1.0D, 1.0D));
 
         private final AtomicBoolean fixtureReady = new AtomicBoolean();
         private final AtomicBoolean serverCheckPending = new AtomicBoolean();
@@ -154,6 +174,8 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
         private final AtomicBoolean fixtureRemoved = new AtomicBoolean();
         private final AtomicBoolean itemServerVerified = new AtomicBoolean();
         private final AtomicBoolean textServerVerified = new AtomicBoolean();
+        private final AtomicBoolean clientCollisionQueriesEqual = new AtomicBoolean();
+        private final AtomicBoolean serverCollisionQueriesEqual = new AtomicBoolean();
         private final AtomicReference<Throwable> asyncFailure = new AtomicReference<>();
         private final AtomicReference<String> serverVerification = new AtomicReference<>("");
 
@@ -174,11 +196,14 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
         private CompletableFuture<Path> itemPickerScreenshot;
         private CompletableFuture<Path> itemSettingsScreenshot;
         private CompletableFuture<Path> textEditorScreenshot;
+        private CompletableFuture<Path> customCollisionScreenshot;
         private boolean screenOpened;
         private boolean inspectorCommitted;
         private boolean gizmoInteractionsVerified;
         private boolean selectionInteractionsVerified;
         private boolean collisionShapeChanged;
+        private boolean clientCollisionVerified;
+        private int collisionVerificationTicks;
         private boolean renderedLayersVerified;
         private boolean farCameraRestored;
         private boolean blockPickerOpened;
@@ -372,13 +397,59 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
             }
 
             if (!collisionShapeChanged) {
+                if (customCollisionScreenshot == null) {
+                    YuushyaEditorScreen screen = requireEnhancedScreen(context);
+                    if (!context.player().getInventory().getItem(8).is(ItemRegistry.SHAPE_ITEM.get())) {
+                        return BenchClientStepResult.CONTINUE;
+                    }
+                    BlackGoldButton button = collisionShapeButton(screen);
+                    for (int click = 0; click < 5; click++) {
+                        button.onPress(new MouseButtonEvent(button.getX() + button.getWidth() * 0.5D,
+                                button.getY() + button.getHeight() * 0.5D,
+                                new MouseButtonInfo(GLFW.GLFW_MOUSE_BUTTON_LEFT, 0)));
+                    }
+                    assertDraftCollisionShape(screen, CollisionShape.Kind.CUSTOM);
+                    closeGuiSession();
+                    invokePrivate(screen, "openCollisionEditor", new Class<?>[0]);
+                    if (!(context.minecraft().screen instanceof CollisionShapeEditorScreen collisionEditor)) {
+                        throw new AssertionError("CUSTOM did not open CollisionShapeEditorScreen");
+                    }
+                    assertStairAutoCollision();
+                    invokePrivate(collisionEditor, "openToolPicker", new Class<?>[0]);
+                    if (!(context.minecraft().screen instanceof ShapeToolPickerScreen picker)) {
+                        throw new AssertionError("Collision editor did not open ShapeToolPickerScreen");
+                    }
+                    double slotX = (picker.width - 224) * 0.5D + 12 + 8 * 20 + 10;
+                    double slotY = (picker.height - 160) * 0.5D + 41 + 68 + 10;
+                    picker.mouseClicked(new MouseButtonEvent(slotX, slotY,
+                            new MouseButtonInfo(GLFW.GLFW_MOUSE_BUTTON_LEFT, 0)), false);
+                    if (!(context.minecraft().screen instanceof CollisionShapeEditorScreen selectedEditor)) {
+                        throw new AssertionError("Shape Tool picker did not return to collision editor");
+                    }
+                    for (CollisionShape.Box box : EDITOR_CUSTOM_BOXES) {
+                        invokePrivate(selectedEditor, "addBox", new Class<?>[0]);
+                        setCollisionEditorBox(selectedEditor, box);
+                    }
+                    guiSession = context.automation().beginGuiSession(CollisionShapeEditorScreen.class);
+                    customCollisionScreenshot = context.automation().captureScreenshot(
+                            "yuushya-editor-custom-collision", guiCaptureOptions());
+                    return BenchClientStepResult.CONTINUE;
+                }
+                if (!customCollisionScreenshot.isDone()) return BenchClientStepResult.CONTINUE;
+                requirePng(customCollisionScreenshot);
+                if (!(context.minecraft().screen instanceof CollisionShapeEditorScreen collisionEditor)) {
+                    throw new AssertionError("Collision editor closed before custom shape verification");
+                }
+                closeGuiSession();
+                invokePrivate(collisionEditor, "save", new Class<?>[0]);
                 YuushyaEditorScreen screen = requireEnhancedScreen(context);
-                BlackGoldButton button = collisionShapeButton(screen);
-                button.onPress(new MouseButtonEvent(button.getX() + button.getWidth() * 0.5D,
-                        button.getY() + button.getHeight() * 0.5D,
-                        new MouseButtonInfo(GLFW.GLFW_MOUSE_BUTTON_LEFT, 0)));
-                assertDraftCollisionShape(screen, CollisionShape.Kind.FENCE);
-                verifySnapshot(guiSession.snapshot());
+                assertDraftCustomCollision(screen);
+                guiSession = context.automation().beginGuiSession(YuushyaEditorScreen.class);
+                transformBoxes = transformBoxes(screen);
+                guiSession.name(transformBoxes[6], "scale-x");
+                guiSession.name(transformBoxes[7], "scale-y");
+                guiSession.name(transformBoxes[8], "scale-z");
+                guiSession.name(collisionShapeButton(screen), "collision-shape");
                 collisionShapeChanged = true;
                 return BenchClientStepResult.CONTINUE;
             }
@@ -590,7 +661,16 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
 
             if (!serverUpdateVerified.get()) pollServerUpdate();
             throwAsyncFailure();
-            if (!serverUpdateVerified.get()) return BenchClientStepResult.CONTINUE;
+            if (!clientCollisionVerified) {
+                clientCollisionVerified = verifyClientCustomCollision(context);
+                collisionVerificationTicks++;
+            }
+            if (!serverUpdateVerified.get() || !clientCollisionVerified) {
+                if (collisionVerificationTicks > 40) {
+                    throw clientCollisionFailure(context);
+                }
+                return BenchClientStepResult.CONTINUE;
+            }
 
             if (!itemEditorOpened) {
                 ItemBlockEntity entity = clientItemFixture(context);
@@ -723,6 +803,7 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
             }
             if (!textEditorScreenshot.isDone()) return BenchClientStepResult.CONTINUE;
             requirePng(textEditorScreenshot);
+            requirePng(customCollisionScreenshot);
             if (!textSettingsApplied) {
                 if (!(context.minecraft().screen instanceof TextContentEditorScreen editor)) {
                     throw new AssertionError("Text editor closed before its content was verified");
@@ -929,7 +1010,17 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                             + "textEditor.addLayer=true\n"
                             + "textEditor.serverVerified=true\n"
                             + "collisionShape.initial=NONE\n"
-                            + "collisionShape.applied=FENCE\n"
+                            + "collisionShape.applied=CUSTOM\n"
+                            + "collisionShape.boxes=3\n"
+                            + "collisionShape.concaveVolumeEqual=true\n"
+                            + "collisionShape.facing=NORTH\n"
+                            + "collisionShape.clientServerCoordinates=verified\n"
+                            + "collisionShape.hostDynamicShape="
+                            + BlockRegistry.SHOW_BLOCK.get().hasDynamicShape() + "\n"
+                            + "collisionShape.contextFreeContextualEqual.client="
+                            + clientCollisionQueriesEqual.get() + "\n"
+                            + "collisionShape.contextFreeContextualEqual.server="
+                            + serverCollisionQueriesEqual.get() + "\n"
                             + "collisionShape.serverVerified=true\n"
                             + "environmentPreview.blocks=stone,gold_block\n"
                             + "environmentPreview.diameter=25\n"
@@ -970,6 +1061,7 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
         private void createFixture(ServerLevel level) {
             try {
                 level.setBlockAndUpdate(fixturePos, BlockRegistry.SHOW_BLOCK.get().defaultBlockState()
+                        .setValue(BlockStateProperties.HORIZONTAL_FACING, Direction.NORTH)
                         .setValue(YuushyaBlockStates.SHAPES, BlockShape.NONE));
                 if (!(level.getBlockEntity(fixturePos) instanceof ShowBlockEntity entity)) {
                     throw new IllegalStateException("Yuushya SHOW_BLOCK did not create ShowBlockEntity at " + fixturePos);
@@ -1006,6 +1098,8 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                     }
                 }
                 player.setGameMode(GameType.CREATIVE);
+                player.getInventory().setItem(8, new ItemStack(ItemRegistry.SHAPE_ITEM.get()));
+                player.inventoryMenu.broadcastChanges();
                 player.setNoGravity(true);
                 player.setInvulnerable(true);
                 player.teleportTo(fixturePos.getX() + 0.5D, fixturePos.getY() + 1.0D, fixturePos.getZ() + 0.5D);
@@ -1081,7 +1175,14 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                     List<TransformBlockData> layers = entity.getTransformData();
                     if (layers.size() != 5 || !isApplied(layers.getFirst())
                             || level.getBlockState(fixturePos).getValue(YuushyaBlockStates.SHAPES)
-                                    != BlockShape.FENCE) return;
+                                    != BlockShape.CUSTOM
+                            || entity.getCustomShape().isEmpty()) return;
+                    if (!matches(entity.getCustomShape(), NORTH_WORLD_CUSTOM_BOXES)) {
+                        throw new AssertionError("Concave custom collision volume did not reach the server: "
+                                + entity.getCustomShape().toAabbs());
+                    }
+                    serverCollisionQueriesEqual.set(checkCollisionQueryAgreement(
+                            level.getBlockState(fixturePos), level, fixturePos, "server"));
                     assertTargetLayer(layers.getFirst());
                     assertLayerEquals("cutout", editedCutoutLayer(), layers.get(1));
                     assertLayerEquals("translucent", translucentLayer(), layers.get(2));
@@ -1101,7 +1202,7 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
                     }
                     serverVerification.set("scaleXYZ=2.0,1.0,1.0;position=4.0,4.0,-2.0;layers=5;"
                             + "added=minecraft:glass@0,0,0;optimizedDuplicate=" + optimized.pos
-                            + ";collisionShape=FENCE;autosave=onClose");
+                            + ";collisionShape=CUSTOM[concave,facing-aware];autosave=onClose");
                     serverUpdateVerified.set(true);
                 } catch (Throwable throwable) {
                     asyncFailure.compareAndSet(null, throwable);
@@ -1361,6 +1462,80 @@ public final class YuushyaEditorBenchProvider implements BenchClientProvider {
             if (document.collisionShape().kind() != expected) {
                 throw new AssertionError("Collision-shape control expected " + expected
                         + " but selected " + document.collisionShape().kind());
+            }
+        }
+
+        private static void assertDraftCustomCollision(YuushyaEditorScreen screen)
+                throws ReflectiveOperationException {
+            Field field = YuushyaEditorScreen.class.getDeclaredField("draft");
+            if (!field.trySetAccessible()) throw new IllegalStateException("Cannot access editor draft");
+            SceneDocument<?> document = (SceneDocument<?>) field.get(screen);
+            CollisionShape shape = document.collisionShape();
+            if (shape.kind() != CollisionShape.Kind.CUSTOM
+                    || !shape.boxes().equals(EDITOR_CUSTOM_BOXES)) {
+                throw new AssertionError("Unexpected custom collision draft: " + shape);
+            }
+        }
+
+        private static void setCollisionEditorBox(CollisionShapeEditorScreen screen,
+                CollisionShape.Box box) throws Exception {
+            Field field = CollisionShapeEditorScreen.class.getDeclaredField("fields");
+            if (!field.trySetAccessible()) throw new IllegalStateException("Cannot edit collision fields");
+            EditBox[] fields = (EditBox[]) field.get(screen);
+            double[] values = {box.minX(), box.minY(), box.minZ(), box.maxX(), box.maxY(), box.maxZ()};
+            for (int index = 0; index < values.length; index++) {
+                fields[index].setValue(Double.toString(values[index]));
+            }
+            invokePrivate(screen, "commitFields", new Class<?>[0]);
+        }
+
+        private boolean verifyClientCustomCollision(BenchClientContext context) {
+            if (!(context.level().getBlockEntity(fixturePos) instanceof ShowBlockEntity entity)) return false;
+            if (!matches(entity.getCustomShape(), NORTH_WORLD_CUSTOM_BOXES)) return false;
+            clientCollisionQueriesEqual.set(checkCollisionQueryAgreement(
+                    context.level().getBlockState(fixturePos), context.level(), fixturePos, "client"));
+            return true;
+        }
+
+        private AssertionError clientCollisionFailure(BenchClientContext context) {
+            Object blockEntity = context.level().getBlockEntity(fixturePos);
+            net.minecraft.world.level.block.state.BlockState state =
+                    context.level().getBlockState(fixturePos);
+            List<net.minecraft.world.phys.AABB> actual = blockEntity instanceof ShowBlockEntity entity
+                    ? entity.getCustomShape().toAabbs() : List.of();
+            return new AssertionError("Client custom collision did not stabilize to the north-facing world shape: "
+                    + "state=" + state
+                    + ", blockEntity=" + (blockEntity == null ? "null" : blockEntity.getClass().getName())
+                    + ", expected=" + NORTH_WORLD_CUSTOM_BOXES + ", actual=" + actual);
+        }
+
+        private static boolean matches(net.minecraft.world.phys.shapes.VoxelShape actual,
+                List<CollisionShape.Box> expected) {
+            return Shapes.equal(actual,
+                    YuushyaShapeToolBridge.toVoxelShape(CollisionShape.custom(expected)));
+        }
+
+        private static boolean checkCollisionQueryAgreement(BlockState state, BlockGetter level,
+                BlockPos pos, String side) {
+            VoxelShape contextFree = state.getCollisionShape(level, pos);
+            VoxelShape contextual = state.getCollisionShape(level, pos, CollisionContext.empty());
+            boolean equal = Shapes.equal(contextFree, contextual);
+            if (state.getBlock().hasDynamicShape() && !equal) {
+                throw new AssertionError("Yuushya custom collision differs between context-free and contextual "
+                        + side + " queries: contextFree=" + contextFree.toAabbs()
+                        + ", contextual=" + contextual.toAabbs());
+            }
+            return equal;
+        }
+
+        private static void assertStairAutoCollision() {
+            SceneLayer<Object> stair = new SceneLayer<>(UUID.randomUUID(), "bench stair",
+                    Blocks.OAK_STAIRS.defaultBlockState(), EditorTransform.IDENTITY, true);
+            CollisionShape generated = CollisionAutoGenerator.generate(List.of(stair));
+            CollisionShape.Box fullBlock = new CollisionShape.Box(0.0D, 0.0D, 0.0D,
+                    1.0D, 1.0D, 1.0D);
+            if (generated.boxes().size() < 2 || generated.boxes().equals(List.of(fullBlock))) {
+                throw new AssertionError("Stair auto-collision collapsed to a full block: " + generated);
             }
         }
 
