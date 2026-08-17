@@ -142,7 +142,7 @@ public final class BlockPreviewPipRenderer extends PictureInPictureRenderer<Bloc
         sceneGeometryFlushes++;
         if (state.showGrid()) drawGrid(poseStack);
         drawModelingCellOutline(poseStack);
-        drawCollisionShape(poseStack, state.collisionShape());
+        drawCollisionShape(poseStack, state.collisionShape(), state.selectedCollisionBox());
         drawInteractionOutlines(poseStack, state);
         if (state.gizmo() != null) drawGizmo(poseStack, state);
     }
@@ -353,7 +353,7 @@ public final class BlockPreviewPipRenderer extends PictureInPictureRenderer<Bloc
                 && box.maxX > box.minX && box.maxY > box.minY && box.maxZ > box.minZ;
     }
 
-    private void drawCollisionShape(PoseStack poseStack, CollisionShape collisionShape) {
+    private void drawCollisionShape(PoseStack poseStack, CollisionShape collisionShape, int selectedBox) {
         if (collisionShape.isEmpty()) return;
         poseStack.pushPose();
         // Yuushya's voxel shapes use the physical ShowBlock cell [0, 1], while the
@@ -361,11 +361,13 @@ public final class BlockPreviewPipRenderer extends PictureInPictureRenderer<Bloc
         poseStack.translate(-0.5F, -0.5F, -0.5F);
         PoseStack.Pose pose = poseStack.last();
         VertexConsumer buffer = bufferSource.getBuffer(RenderTypes.linesTranslucent());
-        for (CollisionShape.Box collisionBox : collisionShape.boxes()) {
+        for (int index = 0; index < collisionShape.boxes().size(); index++) {
+            CollisionShape.Box collisionBox = collisionShape.boxes().get(index);
+            boolean selected = index == selectedBox;
             box(buffer, pose, (float) collisionBox.minX(), (float) collisionBox.minY(),
                     (float) collisionBox.minZ(), (float) collisionBox.maxX(),
                     (float) collisionBox.maxY(), (float) collisionBox.maxZ(),
-                    0xC0FFB347, 1.5F);
+                    selected ? 0xF045E7FF : 0xC0FFB347, selected ? 2.1F : 1.5F);
         }
         poseStack.popPose();
     }

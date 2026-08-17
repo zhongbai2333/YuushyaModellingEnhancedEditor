@@ -30,7 +30,7 @@ class CollisionShapeTest {
         assertEquals(CollisionShape.Kind.BOTTOM_HALF, CollisionShape.Kind.FENCE.nextEditablePreset());
         assertEquals(CollisionShape.Kind.TOP_HALF, CollisionShape.Kind.BOTTOM_HALF.nextEditablePreset());
         assertEquals(CollisionShape.Kind.BLOCK, CollisionShape.Kind.TOP_HALF.nextEditablePreset());
-        assertEquals(CollisionShape.Kind.NONE, CollisionShape.Kind.BLOCK.nextEditablePreset());
+        assertEquals(CollisionShape.Kind.CUSTOM, CollisionShape.Kind.BLOCK.nextEditablePreset());
         assertEquals(CollisionShape.Kind.NONE, CollisionShape.Kind.CUSTOM.nextEditablePreset());
     }
 

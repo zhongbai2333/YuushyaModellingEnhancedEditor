@@ -62,6 +62,7 @@ This avoids patching Yuushya source and allows the unmodified screen to remain t
 | Incremental submission | `TransformDataOncePacket.sendToServerSide` |
 | Field selector | `TransformType` |
 | Commit/save signal | `TransformDataOncePacket.sendToServerSideSuccess` |
+| Custom collision payload | `AbstractTransformBlockEntity#getCustomShape()` / Shape Tool `SHAPE_DATA` |
 | Original fallback | `ShowBlockScreen` |
 
 The same adapter pattern is used for `ItemBlockScreen`/`ItemBlockEntity` and `TextBlockScreen`/`TextBlockEntity`.
@@ -97,6 +98,25 @@ an immutable draft; normal exit validates and commits it, while the explicit dis
 7. Visible block layers are checked for coplanar faces before save; the user may apply a reversible `1e-4` offset,
    keep the overlap, or return to editing.
 8. A supported-version update requires compatibility tests and an in-game smoke test with both mods installed.
+9. Custom collision editing remains client-only: it requires Creative mode, synchronizes a selected Shape Tool
+   with vanilla creative-inventory packets, and applies it through Yuushya's normal `ShapeItem` interaction.
+   It must not add a custom server packet or write block-entity NBT directly.
+10. Auto-generated block collision keeps each outline-shape AABB before transformation. Out-of-cell boxes remain
+    editable for native-data compatibility, but the UI must warn that vanilla collision broadphase can stop querying
+    their source block and offer lossless-to-the-cell clipping; do not imply a client-only fix changes server physics.
+11. Custom collision is edited in canonical model space. Shape Tool payloads and block-entity `customShape` are in
+    world-local space, so block `HORIZONTAL_FACING` must be applied on write and inverted on read. Yuushya rotates
+    rendered ShowBlock geometry around the cell center but returns `customShape` without that rotation.
+12. A visible concave cavity is not necessarily traversable. A standing player's horizontal AABB is about 0.6 blocks
+    wide, so the vanilla inner-stair 0.5-by-0.5 upper cavity cannot contain it. Do not "fix" this by silently eroding
+    generated collision; document the clearance requirement and test concave multi-box client/server round trips.
+13. The audited Yuushya Modelling 2.4.2 registers ShowBlock, ItemBlock, and TextBlock without `dynamicShape`, although
+    CUSTOM collision reads block-entity `customShape`. Minecraft can therefore cache the fallback collision for
+    context-free state queries while contextual queries read the live shape. Vanilla stairs are state-only and do
+    not have this split. The complete fix belongs upstream and must run on both sides; do not add a client-only Mixin
+    that changes block shape caching. While 2.4.2 remains supported, Bench records the known mismatch without
+    blocking this client-only add-on's release; once the host declares `dynamicShape`, the same Bench hard-asserts
+    equality between context-free and contextual queries on both the integrated client and server.
 
 ## Delivery sequence
 
@@ -197,8 +217,9 @@ All seven steps are implemented for the three committed editor targets.
   results, unchanged sibling layers, fixture cleanup, visible stone/oak-leaves/honey rendering, a dense 25×25
   platform plus gold environment sampling, registry preview/search, block and item-picker PIP previews, appending
   duplicate `minecraft:glass` layers at `(0,0,0)`, the real Z-fighting optimize-and-save decision and its
-  server-side epsilon offset, selected-layer visibility, near/far line-width compensation, the `NONE → FENCE`
-  collision-shape transition on the server, a live environment block update, real ItemBlock deletion, and real
+  server-side epsilon offset, selected-layer visibility, near/far line-width compensation, `NONE → CUSTOM`
+  collision editing through a Creative Shape Tool plus exact server-side custom-box bounds,
+  a live environment block update, real ItemBlock deletion, and real
   TextBlock multiline content/culling/mirroring updates, creation of a second text layer, and server reload. It
   hard-asserts in a dedicated unchanged warmup window that PIP
   textures are reused more often than rendered, that model resolutions are a minority of edited instances, the

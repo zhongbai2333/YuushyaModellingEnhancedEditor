@@ -98,7 +98,8 @@ public final class Yuushya26StructuredEditorHost implements YuushyaEditorHost<Ob
     public SceneDocument<Object> loadDocument() {
         List<? extends ITransformDataProvider> source = transformData();
         int selectedSlot = blockEntity.getSlot();
-        CollisionShape collisionShape = readCollisionShape(blockEntity.getBlockState());
+        CollisionShape collisionShape = readCollisionShape(blockEntity.getBlockState(),
+                blockEntity.getCustomShape());
         String documentKey = variant.name() + ':' + blockPos.toShortString();
         List<SceneLayer<Object>> layers = new ArrayList<>(source.size());
         rawLayers.clear();
@@ -444,15 +445,17 @@ public final class Yuushya26StructuredEditorHost implements YuushyaEditorHost<Ob
         level.sendBlockUpdated(blockPos, state, state, 11);
     }
 
-    private static CollisionShape readCollisionShape(BlockState blockState) {
+    private static CollisionShape readCollisionShape(BlockState blockState,
+            net.minecraft.world.phys.shapes.VoxelShape customShape) {
         BlockShape value = blockState.getValue(YuushyaBlockStates.SHAPES);
         CollisionShape.Kind kind = CollisionShape.Kind.valueOf(value.name());
         if (kind != CollisionShape.Kind.CUSTOM) return CollisionShape.forKind(kind);
         List<CollisionShape.Box> boxes = new ArrayList<>();
-        for (AABB box : value.voxelShape.toAabbs()) {
+        if (customShape == null) return CollisionShape.custom(boxes);
+        for (AABB box : customShape.toAabbs()) {
             boxes.add(new CollisionShape.Box(box.minX, box.minY, box.minZ, box.maxX, box.maxY, box.maxZ));
         }
-        return CollisionShape.custom(boxes);
+        return YuushyaCollisionCoordinates.toEditor(blockState, CollisionShape.custom(boxes));
     }
 
     private String layerName(int slot, Object hostData) {

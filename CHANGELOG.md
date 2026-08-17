@@ -4,6 +4,39 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 0.1.7-beta - 2026-08-17
+
+### Added
+
+- Added a dedicated custom-collision element editor for block models, including selectable previews, numeric and
+  Gizmo editing, visibility control, Shape Tool inventory selection, native read/write, and automatic generation
+  from visible model geometry.
+- Added lossless in-cell clipping, conservative rotated-element bounds, shape simplification, complexity warnings,
+  and facing-aware conversion between editor and Yuushya world-local collision coordinates.
+- Extended the real integrated-client Bench to apply an asymmetric three-box concave collision through a Creative
+  Shape Tool and verify exact client/server persistence, orientation, and query behavior.
+
+### Changed
+
+- Custom collision remains client-side to this add-on by reusing Minecraft's Creative inventory synchronization
+  and Yuushya's existing Shape Tool interaction; no private server packet or persistent data format was added.
+- The release Bench records Yuushya 2.4.2's known context-free/contextual collision mismatch without blocking this
+  add-on. Hosts declaring dynamic shapes must still pass the strict equality assertion on client and server.
+
+### Fixed
+
+- Automatic collision generation now preserves multi-box outlines such as stairs instead of collapsing them to a
+  full-block AABB, and rotated custom shapes are converted consistently with the modeled block facing.
+- Item-model selection bounds now follow the rendered model instead of the containing one-block cell.
+
+### Known limitations
+
+- Yuushya Modelling 2.4.2 does not mark its block-entity-backed custom collision as dynamic, so some Minecraft
+  collision query paths can still see a cached full block. Upstream is aware and preparing the host-side fix; this
+  client-only add-on intentionally does not patch server physics.
+
+## 0.1.6-beta - 2026-08-16
+
 ### Added
 
 - Complete block-state property menu for modeled block layers, including facing, shape and waterlogged values,

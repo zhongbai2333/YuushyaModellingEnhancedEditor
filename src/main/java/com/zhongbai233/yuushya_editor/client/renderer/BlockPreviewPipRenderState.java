@@ -11,7 +11,8 @@ import net.minecraft.client.renderer.state.gui.pip.PictureInPictureRenderState;
 /** One immutable editor viewport snapshot submitted to Minecraft's GUI PIP pass. */
 public record BlockPreviewPipRenderState(EnvironmentPreviewFrame environmentFrame,
         List<BlockPreviewLayer> layers, CameraFrame cameraFrame,
-        BlockPreviewGizmo gizmo, CollisionShape collisionShape, float lineWidthScale, boolean showGrid,
+        BlockPreviewGizmo gizmo, CollisionShape collisionShape, int selectedCollisionBox,
+        float lineWidthScale, boolean showGrid,
         int x0, int y0, int x1, int y1, float scale,
         ScreenRectangle scissorArea,
         ScreenRectangle bounds) implements PictureInPictureRenderState {
@@ -34,7 +35,7 @@ public record BlockPreviewPipRenderState(EnvironmentPreviewFrame environmentFram
             BlockPreviewGizmo gizmo, float lineWidthScale, boolean showGrid,
             int x0, int y0, int x1, int y1,
             ScreenRectangle scissorArea) {
-        this(environmentFrame, layers, cameraFrame, gizmo, CollisionShape.none(), lineWidthScale, showGrid,
+        this(environmentFrame, layers, cameraFrame, gizmo, CollisionShape.none(), -1, lineWidthScale, showGrid,
                 x0, y0, x1, y1, 1.0F, scissorArea,
                 PictureInPictureRenderState.getBounds(x0, y0, x1, y1, scissorArea));
     }
@@ -44,15 +45,26 @@ public record BlockPreviewPipRenderState(EnvironmentPreviewFrame environmentFram
             BlockPreviewGizmo gizmo, CollisionShape collisionShape, float lineWidthScale, boolean showGrid,
             int x0, int y0, int x1, int y1,
             ScreenRectangle scissorArea) {
-        this(environmentFrame, layers, cameraFrame, gizmo, collisionShape, lineWidthScale, showGrid,
+        this(environmentFrame, layers, cameraFrame, gizmo, collisionShape, -1, lineWidthScale, showGrid,
                 x0, y0, x1, y1, 1.0F, scissorArea,
+                PictureInPictureRenderState.getBounds(x0, y0, x1, y1, scissorArea));
+    }
+
+    public BlockPreviewPipRenderState(EnvironmentPreviewFrame environmentFrame,
+            List<BlockPreviewLayer> layers, CameraFrame cameraFrame,
+            BlockPreviewGizmo gizmo, CollisionShape collisionShape, int selectedCollisionBox,
+            float lineWidthScale, boolean showGrid, int x0, int y0, int x1, int y1,
+            ScreenRectangle scissorArea) {
+        this(environmentFrame, layers, cameraFrame, gizmo, collisionShape, selectedCollisionBox,
+                lineWidthScale, showGrid, x0, y0, x1, y1, 1.0F, scissorArea,
                 PictureInPictureRenderState.getBounds(x0, y0, x1, y1, scissorArea));
     }
 
     public BlockPreviewPipRenderState(List<BlockPreviewLayer> layers, CameraFrame cameraFrame,
             BlockPreviewGizmo gizmo, float lineWidthScale, boolean showGrid,
             int x0, int y0, int x1, int y1, ScreenRectangle scissorArea) {
-        this(EnvironmentPreviewFrame.empty(), layers, cameraFrame, gizmo, CollisionShape.none(), lineWidthScale, showGrid,
+        this(EnvironmentPreviewFrame.empty(), layers, cameraFrame, gizmo, CollisionShape.none(), -1,
+                lineWidthScale, showGrid,
                 x0, y0, x1, y1, scissorArea);
     }
 }
